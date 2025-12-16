@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Audio Monitor Integration Test</title>
+    <style>
+        body { font-family: Arial; padding: 20px; background: #f5f5f5; }
+        .test { background: white; padding: 20px; margin: 10px 0; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+        .pass { border-left: 5px solid #28a745; }
+        .fail { border-left: 5px solid #dc3545; }
+        h2 { color: #2d5f3f; }
+        .result { font-weight: bold; padding: 10px; margin-top: 10px; border-radius: 4px; }
+        .pass .result { background: #d4edda; color: #155724; }
+        .fail .result { background: #f8d7da; color: #721c24; }
+        button { background: #2d5f3f; color: white; padding: 10px 20px; border: none; border-radius: 4px; cursor: pointer; font-size: 16px; }
+        button:hover { background: #3d7f5f; }
+        pre { background: #f8f9fa; padding: 15px; border-radius: 4px; overflow-x: auto; }
+    </style>
+</head>
+<body>
+    <h1>🎙️ Audio Monitor Integration Diagnostics</h1>
+    <p>This page tests if the audio monitoring is properly integrated.</p>
+    
+    <button onclick="runAllTests()">▶️ Run All Tests</button>
+    
+    <div id="test-results"></div>
+    
+    <script>
+        async function runAllTests() {
+            const results = document.getElementById('test-results');
+            results.innerHTML = '<h2>Running tests...</h2>';
+            
+            const tests = [];
+            
+            // Test 1: Check backend imports
+            tests.push(await testBackendAvailability());
+            
+            // Test 2: Check API endpoints
+            tests.push(await testAPIEndpoint('/api/audio/overview', 'Overview API'));
+            tests.push(await testAPIEndpoint('/api/audio/processed?limit=5', 'Processed API'));
+            tests.push(await testAPIEndpoint('/api/audio/pending?limit=5', 'Pending API'));
+            tests.push(await testAPIEndpoint('/api/audio/failed?limit=5', 'Failed API'));
+            tests.push(await testAPIEndpoint('/api/audio/analytics?days=30', 'Analytics API'));
+            
+            // Display results
+            displayResults(tests);
+        }
+        
+        async function testBackendAvailability() {
+            try {
+                const response = await fetch('/api/audio/overview');
+                const data = await response.json();
+                
+                if (response.status === 503) {
+                    return {
+                        name: 'Backend Availability',
+                        pass: false,
+                        message: 'Audio monitoring not enabled. Install: pip install azure-storage-blob python-dotenv'
+                    };
+                }
+                
+                if (response.ok) {
+                    return {
+                        name: 'Backend Availability',
+                        pass: true,
+                        message: `✅ Audio monitoring is enabled! Found ${data.processed || 0} processed recordings.`
+                    };
+                }
+                
+                return {
+                    name: 'Backend Availability',
+                    pass: false,
+                    message: `Error: ${data.error || 'Unknown error'}`
+                };
+            } catch (e) {
+                return {
+                    name: 'Backend Availability',
+                    pass: false,
+                    message: `Connection error: ${e.message}`
+                };
+            }
+        }
+        
+        async function testAPIEndpoint(endpoint, name) {
+            try {
+                const response = await fetch(endpoint);
+                const data = await response.json();
+                
+                if (response.ok) {
+                    return {
+                        name: name,
+                        pass: true,
+                        message: `✅ Working! Response: ${JSON.stringify(data).substring(0, 100)}...`
+                    };
+                }
+                
+                return {
+                    name: name,
+                    pass: false,
+                    message: `❌ Failed: ${data.error || response.statusText}`
+                };
+            } catch (e) {
+                return {
+                    name: name,
+                    pass: false,
+                    message: `❌ Error: ${e.message}`
+                };
+            }
+        }
+        
+        function displayResults(tests) {
+            const results = document.getElementById('test-results');
+            const passed = tests.filter(t => t.pass).length;
+            const total = tests.length;
+            
+            let html = `<h2>Test Results: ${passed}/${total} Passed</h2>`;
+            
+            tests.forEach(test => {
+                html += `
+                    <div class="test ${test.pass ? 'pass' : 'fail'}">
+                        <h3>${test.pass ? '✅' : '❌'} ${test.name}</h3>
+                        <div class="result">${test.message}</div>
+                    </div>
+                `;
+            });
+            
+            if (passed === total) {
+                html += `
+                    <div class="test pass">
+                        <h3>🎉 All Tests Passed!</h3>
+                        <div class="result">
+                            Audio monitoring is fully functional!<br>
+                            Go to the main dashboard and click the 🎙️ AUDIO MONITOR tab.
+                        </div>
+                    </div>
+                `;
+            } else {
+                html += `
+                    <div class="test fail">
+                        <h3>⚠️ Some Tests Failed</h3>
+                        <div class="result">
+                            Please check the error messages above and:<br>
+                            1. Ensure backend/.env file exists with Azure credentials<br>
+                            2. Run: pip install azure-storage-blob python-dotenv<br>
+                            3. Restart the Flask server
+                        </div>
+                    </div>
+                `;
+            }
+            
+            results.innerHTML = html;
+        }
+        
+        // Auto-run on load
+        window.addEventListener('load', runAllTests);
+    </script>
+</body>
+</html>
+

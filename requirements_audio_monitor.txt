@@ -1,0 +1,17 @@
+# Audio Processing Monitor - Python Dependencies
+
+# Core Flask dependencies
+flask
+Flask-Bcrypt
+
+# Azure Storage
+azure-storage-blob
+
+# Data processing
+python-dateutil
+
+
+python-dotenv
+gunicorn
+cryptography
+

@@ -556,6 +556,7 @@
             <div class="nav-item" data-module="operations">OPERATIONS</div>
             <div class="nav-item" data-module="engagement">ENGAGEMENT</div>
             <div class="nav-item" data-module="admin">ADMIN</div>
+            <div class="nav-item" data-module="audio">AUDIO MONITOR</div>
         </nav>
         <div style="display: flex; align-items: center; gap: 20px;">
             <div style="font-size: 14px; color: #666;">
@@ -1056,6 +1057,171 @@
                 </div>
             </div>
         </div>
+
+        <!-- AUDIO MONITOR MODULE -->
+        <div class="module-view" id="audio-module">
+            <div class="kpi-row">
+                <div class="kpi-card" style="background: linear-gradient(135deg, #ffc107, #ff9800);">
+                    <div class="kpi-value" id="audioPendingCount">0</div>
+                    <div class="kpi-label">PENDING</div>
+                </div>
+                <div class="kpi-card" style="background: linear-gradient(135deg, var(--secondary-green), var(--primary-green));">
+                    <div class="kpi-value" id="audioProcessedCount">0</div>
+                    <div class="kpi-label">PROCESSED</div>
+                </div>
+                <div class="kpi-card" style="background: linear-gradient(135deg, #dc3545, #c82333);">
+                    <div class="kpi-value" id="audioFailedCount">0</div>
+                    <div class="kpi-label">FAILED</div>
+                </div>
+                <div class="kpi-card" style="background: linear-gradient(135deg, #6c757d, #495057);">
+                    <div class="kpi-value" id="audioTotalCount">0</div>
+                    <div class="kpi-label">TOTAL</div>
+                </div>
+            </div>
+
+            <!-- Sub-tabs -->
+            <div style="display: flex; gap: 10px; margin: 20px 0; border-bottom: 2px solid var(--border-color);">
+                <button class="audio-tab-btn active" data-audio-tab="processed" style="padding: 12px 24px; background: var(--primary-green); color: white; border: none; border-radius: 4px 4px 0 0; cursor: pointer; font-weight: 600; font-size: 14px;">Processed</button>
+                <button class="audio-tab-btn" data-audio-tab="pending" style="padding: 12px 24px; background: #f0f0f0; color: var(--dark-gray); border: none; border-radius: 4px 4px 0 0; cursor: pointer; font-weight: 600; font-size: 14px;">Pending</button>
+                <button class="audio-tab-btn" data-audio-tab="failed" style="padding: 12px 24px; background: #f0f0f0; color: var(--dark-gray); border: none; border-radius: 4px 4px 0 0; cursor: pointer; font-weight: 600; font-size: 14px;">Failed</button>
+                <button class="audio-tab-btn" data-audio-tab="language" style="padding: 12px 24px; background: #f0f0f0; color: var(--dark-gray); border: none; border-radius: 4px 4px 0 0; cursor: pointer; font-weight: 600; font-size: 14px;">Language Breakdown</button>
+                <button class="audio-tab-btn" data-audio-tab="analytics" style="padding: 12px 24px; background: #f0f0f0; color: var(--dark-gray); border: none; border-radius: 4px 4px 0 0; cursor: pointer; font-weight: 600; font-size: 14px;">Analytics</button>
+            </div>
+
+            <!-- Processed Tab -->
+            <div class="audio-tab-content" id="audio-processed-tab">
+                <div class="chart-title">Processed Recordings</div>
+                <div style="margin: 15px 0; display: flex; justify-content: space-between; align-items: center;">
+                    <button onclick="loadAudioProcessed(0)" style="padding: 10px 20px; background: var(--primary-green); color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: 600;">Refresh</button>
+                    <span id="audioProcessedInfo" style="color: var(--dark-gray); font-size: 14px;"></span>
+                </div>
+                <div class="table-container">
+                    <table class="position-table" style="width: 100%;">
+                        <thead>
+                            <tr>
+                                <th>Filename</th>
+                                <th>Language</th>
+                                <th>Audio Duration</th>
+                                <th>Processing Time</th>
+                                <th>Ratio</th>
+                                <th>Processed At</th>
+                                <th>Quality</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="audioProcessedTable">
+                            <tr><td colspan="8">Loading...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+                <div id="audioProcessedPagination" style="display: flex; justify-content: center; align-items: center; gap: 10px; margin-top: 20px; padding: 15px; background: var(--light-gray); border-radius: 8px;"></div>
+            </div>
+
+            <!-- Pending Tab -->
+            <div class="audio-tab-content" id="audio-pending-tab" style="display: none;">
+                <div class="chart-title">Pending Recordings</div>
+                <div style="margin: 15px 0; display: flex; justify-content: space-between; align-items: center;">
+                    <button onclick="loadAudioPending(0)" style="padding: 10px 20px; background: var(--primary-green); color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: 600;">Refresh</button>
+                    <span id="audioPendingInfo" style="color: var(--dark-gray); font-size: 14px;"></span>
+                </div>
+                <div class="table-container">
+                    <table class="position-table" style="width: 100%;">
+                        <thead>
+                            <tr>
+                                <th>Filename</th>
+                                <th>Upload Time</th>
+                                <th>Size</th>
+                                <th>Status</th>
+                            </tr>
+                        </thead>
+                        <tbody id="audioPendingTable">
+                            <tr><td colspan="4">Loading...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+                <div id="audioPendingPagination" style="display: flex; justify-content: center; align-items: center; gap: 10px; margin-top: 20px; padding: 15px; background: var(--light-gray); border-radius: 8px;"></div>
+            </div>
+
+            <!-- Failed Tab -->
+            <div class="audio-tab-content" id="audio-failed-tab" style="display: none;">
+                <div class="chart-title">Failed Recordings</div>
+                <div style="margin: 15px 0; display: flex; justify-content: space-between; align-items: center;">
+                    <button onclick="loadAudioFailed(0)" style="padding: 10px 20px; background: var(--primary-green); color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: 600;">Refresh</button>
+                    <span id="audioFailedInfo" style="color: var(--dark-gray); font-size: 14px;"></span>
+                </div>
+                <div class="table-container">
+                    <table class="position-table" style="width: 100%;">
+                        <thead>
+                            <tr>
+                                <th>Filename</th>
+                                <th>Failure Time</th>
+                                <th>Stage</th>
+                                <th>Error</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="audioFailedTable">
+                            <tr><td colspan="5">Loading...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+                <div id="audioFailedPagination" style="display: flex; justify-content: center; align-items: center; gap: 10px; margin-top: 20px; padding: 15px; background: var(--light-gray); border-radius: 8px;"></div>
+            </div>
+
+            <!-- Language Breakdown Tab -->
+            <div class="audio-tab-content" id="audio-language-tab" style="display: none;">
+                <div class="chart-title">Language Breakdown</div>
+                <div style="margin: 15px 0; display: flex; justify-content: space-between; align-items: center;">
+                    <button onclick="loadAudioLanguageBreakdown()" style="padding: 10px 20px; background: var(--primary-green); color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: 600;">Refresh</button>
+                </div>
+                <div id="audioLanguageContent">
+                    <p>Loading language breakdown...</p>
+                </div>
+            </div>
+
+            <!-- Analytics Tab -->
+            <div class="audio-tab-content" id="audio-analytics-tab" style="display: none;">
+                <div class="chart-title">Processing Analytics</div>
+                <div id="audioAnalyticsContent">
+                    <p>Loading analytics...</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Translation Modal -->
+    <div id="translationModal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.7); z-index: 10000; overflow: auto;">
+        <div style="background: white; margin: 30px auto; max-width: 1000px; border-radius: 10px; box-shadow: 0 10px 40px rgba(0,0,0,0.3);">
+            <div style="padding: 20px 30px; border-bottom: 3px solid var(--primary-green); display: flex; justify-content: space-between; align-items: center; background-color: var(--light-gray);">
+                <h2 id="modalFilename" style="margin: 0; color: var(--primary-green); font-size: 16px; word-break: break-all;"></h2>
+                <button onclick="closeTranslationModal()" style="background: none; border: none; font-size: 32px; cursor: pointer; color: #999; line-height: 1;">&times;</button>
+            </div>
+            <div style="padding: 30px;">
+                <!-- Audio Player -->
+                <div style="margin: 20px 0;">
+                    <h3 style="color: var(--primary-green); margin-bottom: 15px; font-size: 16px;">Audio Player</h3>
+                    <audio id="modalAudio" controls style="width: 100%; border-radius: 4px;"></audio>
+                </div>
+                
+                <!-- Processing Metadata -->
+                <div style="margin: 20px 0;">
+                    <h3 style="color: var(--primary-green); margin-bottom: 15px; font-size: 16px;">Processing Details</h3>
+                    <div id="modalMetadata" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px;"></div>
+                </div>
+                
+                <!-- Original Transcription -->
+                <div style="margin: 20px 0;">
+                    <h3 style="color: var(--teal); margin-bottom: 15px; font-size: 16px;">Original Transcription</h3>
+                    <div id="modalTranscription" style="background: #f8f9fa; padding: 20px; border-radius: 8px; line-height: 1.8; border-left: 5px solid var(--teal); min-height: 80px; white-space: pre-wrap; font-style: italic;"></div>
+                </div>
+                
+                <!-- English Translation (hidden for customer_admin) -->
+                <div id="translationSection" style="margin: 20px 0;">
+                    <h3 style="color: var(--primary-green); margin-bottom: 15px; font-size: 16px;">English Translation</h3>
+                    <div id="modalTranslation" style="background: #e8f5e9; padding: 20px; border-radius: 8px; line-height: 1.8; border-left: 5px solid var(--primary-green); min-height: 80px; white-space: pre-wrap;"></div>
+                </div>
+            </div>
+        </div>
     </div>
 
     <script>
@@ -1099,46 +1265,49 @@
                 });
         }
 
-        // Navigation
-        document.querySelectorAll('.nav-item').forEach(item => {
-            item.addEventListener('click', function() {
-                const module = this.getAttribute('data-module');
-                
-                document.querySelectorAll('.nav-item').forEach(i => i.classList.remove('active'));
-                this.classList.add('active');
-                
-                const moduleNames = {
-                    'home': 'Market Pulse',
-                    'marketing': 'Marketing Analytics',
-                    'operations': 'Operations Dashboard',
-                    'engagement': 'Engagement Metrics',
-                    'admin': 'Admin Panel'
-                };
-                document.getElementById('current-module').textContent = moduleNames[module];
-                
-                document.querySelectorAll('.module-view').forEach(v => v.classList.remove('active'));
-                document.getElementById(module + '-module').classList.add('active');
-                
-                loadModuleData(module);
+        // Navigation (will be initialized in DOMContentLoaded)
+        function setupNavigation() {
+            document.querySelectorAll('.nav-item').forEach(item => {
+                item.addEventListener('click', function() {
+                    const module = this.getAttribute('data-module');
+                    
+                    document.querySelectorAll('.nav-item').forEach(i => i.classList.remove('active'));
+                    this.classList.add('active');
+                    
+                    const moduleNames = {
+                        'home': 'Market Pulse',
+                        'marketing': 'Marketing Analytics',
+                        'operations': 'Operations Dashboard',
+                        'engagement': 'Engagement Metrics',
+                        'admin': 'Admin Panel',
+                        'audio': 'Audio Processing Monitor'
+                    };
+                    document.getElementById('current-module').textContent = moduleNames[module];
+                    
+                    document.querySelectorAll('.module-view').forEach(v => v.classList.remove('active'));
+                    document.getElementById(module + '-module').classList.add('active');
+                    
+                    loadModuleData(module);
+                });
             });
-        });
 
-        // Date filter handling
-        document.getElementById('dateFilter').addEventListener('change', function() {
-            const customInputs = document.getElementById('customDateInputs');
-            if (this.value === 'custom') {
-                customInputs.classList.add('active');
-            } else {
-                customInputs.classList.remove('active');
+            // Date filter handling
+            document.getElementById('dateFilter').addEventListener('change', function() {
+                const customInputs = document.getElementById('customDateInputs');
+                if (this.value === 'custom') {
+                    customInputs.classList.add('active');
+                } else {
+                    customInputs.classList.remove('active');
+                    const activeModule = document.querySelector('.nav-item.active').getAttribute('data-module');
+                    loadModuleData(activeModule);
+                }
+            });
+
+            document.getElementById('endDate').addEventListener('change', function() {
                 const activeModule = document.querySelector('.nav-item.active').getAttribute('data-module');
                 loadModuleData(activeModule);
-            }
-        });
-
-        document.getElementById('endDate').addEventListener('change', function() {
-            const activeModule = document.querySelector('.nav-item.active').getAttribute('data-module');
-            loadModuleData(activeModule);
-        });
+            });
+        }
 
         function getDateFilter() {
             const dateSelect = document.getElementById('dateFilter').value;
@@ -1190,6 +1359,9 @@
                     break;
                 case 'admin':
                     loadAdminData();
+                    break;
+                case 'audio':
+                    loadAudioData();
                     break;
             }
         }
@@ -2444,8 +2616,802 @@
                 });
         }
 
+        // AUDIO MONITORING MODULE
+        function loadAudioData() {
+            // Load overview first (fast), then load tabs in parallel
+            loadAudioOverview();
+            initAudioTabs();
+            
+            // Load data for active tab first, then others in background
+            const activeTab = document.querySelector('.audio-tab-btn.active');
+            if (activeTab) {
+                const activeTabName = activeTab.getAttribute('data-audio-tab');
+                switch(activeTabName) {
+                    case 'processed': loadAudioProcessed(0); break;
+                    case 'pending': loadAudioPending(0); break;
+                    case 'failed': loadAudioFailed(0); break;
+                    case 'language': loadAudioLanguageBreakdown(); break;
+                    case 'analytics': loadAudioAnalytics(); break;
+                    default: loadAudioProcessed(0);
+                }
+            } else {
+                // Default to processed tab
+                loadAudioProcessed(0);
+            }
+            
+            // Load other tabs in background (non-blocking)
+            setTimeout(() => {
+                loadAudioPending(0);
+                loadAudioFailed(0);
+            }, 500);
+        }
+
+        function loadAudioOverview() {
+            // Load overview statistics (pending, processed, failed counts)
+            fetch('/api/audio/overview')
+                .then(res => res.json())
+                .then(data => {
+                    if (data.pending !== undefined) {
+                        document.getElementById('audioPendingCount').textContent = data.pending || 0;
+                    }
+                    if (data.processed !== undefined) {
+                        document.getElementById('audioProcessedCount').textContent = data.processed || 0;
+                    }
+                    if (data.failed !== undefined) {
+                        document.getElementById('audioFailedCount').textContent = data.failed || 0;
+                    }
+                    updateAudioTotalCount();
+                })
+                .catch(err => {
+                    console.error('Error loading audio overview:', err);
+                });
+        }
+
+        // Audio pagination state
+        const audioPageSize = 50;
+        let audioCurrentPage = {
+            processed: 0,
+            pending: 0,
+            failed: 0
+        };
+
+        function initAudioTabs() {
+            document.querySelectorAll('.audio-tab-btn').forEach(btn => {
+                btn.addEventListener('click', function() {
+                    const tabName = this.getAttribute('data-audio-tab');
+                    
+                    // Update button styles
+                    document.querySelectorAll('.audio-tab-btn').forEach(b => {
+                        b.style.background = '#f0f0f0';
+                        b.style.color = 'var(--dark-gray)';
+                    });
+                    this.style.background = 'var(--primary-green)';
+                    this.style.color = 'white';
+                    
+                    // Update content
+                    document.querySelectorAll('.audio-tab-content').forEach(content => {
+                        content.style.display = 'none';
+                    });
+                    document.getElementById(`audio-${tabName}-tab`).style.display = 'block';
+                    
+                    // Load data
+                    switch(tabName) {
+                        case 'pending': loadAudioPending(audioCurrentPage.pending); break;
+                        case 'processed': loadAudioProcessed(audioCurrentPage.processed); break;
+                        case 'failed': loadAudioFailed(audioCurrentPage.failed); break;
+                        case 'language': loadAudioLanguageBreakdown(); break;
+                        case 'analytics': loadAudioAnalytics(); break;
+                    }
+                });
+            });
+        }
+
+        // Update total count from individual container counts
+        function updateAudioTotalCount() {
+            const pending = parseInt(document.getElementById('audioPendingCount').textContent) || 0;
+            const processed = parseInt(document.getElementById('audioProcessedCount').textContent) || 0;
+            const failed = parseInt(document.getElementById('audioFailedCount').textContent) || 0;
+            document.getElementById('audioTotalCount').textContent = pending + processed + failed;
+        }
+
+        function renderAudioPagination(containerId, infoId, type, currentPage, total) {
+            const totalPages = Math.ceil(total / audioPageSize);
+            const paginationDiv = document.getElementById(containerId);
+            const infoDiv = document.getElementById(infoId);
+            
+            const startItem = currentPage * audioPageSize + 1;
+            const endItem = Math.min((currentPage + 1) * audioPageSize, total);
+            
+            infoDiv.textContent = total > 0 ? `Showing ${startItem}-${endItem} of ${total} recordings` : 'No recordings';
+            
+            if (totalPages <= 1) {
+                paginationDiv.innerHTML = '';
+                return;
+            }
+            
+            const loadFunc = type === 'processed' ? 'loadAudioProcessed' : 
+                            type === 'pending' ? 'loadAudioPending' : 'loadAudioFailed';
+            
+            let html = `
+                <button onclick="${loadFunc}(0)" ${currentPage === 0 ? 'disabled' : ''} 
+                    style="padding: 8px 16px; background: ${currentPage === 0 ? '#ccc' : 'var(--primary-green)'}; color: white; border: none; border-radius: 4px; cursor: ${currentPage === 0 ? 'not-allowed' : 'pointer'}; font-weight: 600;">
+                    First
+                </button>
+                <button onclick="${loadFunc}(${currentPage - 1})" ${currentPage === 0 ? 'disabled' : ''} 
+                    style="padding: 8px 16px; background: ${currentPage === 0 ? '#ccc' : 'var(--primary-green)'}; color: white; border: none; border-radius: 4px; cursor: ${currentPage === 0 ? 'not-allowed' : 'pointer'}; font-weight: 600;">
+                    Previous
+                </button>
+                <span style="padding: 8px 16px; background: white; border-radius: 4px; font-weight: 600; color: var(--dark-gray);">
+                    Page ${currentPage + 1} of ${totalPages}
+                </span>
+                <button onclick="${loadFunc}(${currentPage + 1})" ${currentPage >= totalPages - 1 ? 'disabled' : ''} 
+                    style="padding: 8px 16px; background: ${currentPage >= totalPages - 1 ? '#ccc' : 'var(--primary-green)'}; color: white; border: none; border-radius: 4px; cursor: ${currentPage >= totalPages - 1 ? 'not-allowed' : 'pointer'}; font-weight: 600;">
+                    Next
+                </button>
+                <button onclick="${loadFunc}(${totalPages - 1})" ${currentPage >= totalPages - 1 ? 'disabled' : ''} 
+                    style="padding: 8px 16px; background: ${currentPage >= totalPages - 1 ? '#ccc' : 'var(--primary-green)'}; color: white; border: none; border-radius: 4px; cursor: ${currentPage >= totalPages - 1 ? 'not-allowed' : 'pointer'}; font-weight: 600;">
+                    Last
+                </button>
+            `;
+            
+            paginationDiv.innerHTML = html;
+        }
+
+        function loadAudioProcessed(page = 0) {
+            // Prevent multiple simultaneous loads
+            if (window.audioLoading) {
+                return;
+            }
+            window.audioLoading = true;
+            
+            audioCurrentPage.processed = page;
+            const offset = page * audioPageSize;
+            
+            const tbody = document.getElementById('audioProcessedTable');
+            if (tbody) {
+                tbody.innerHTML = '<tr><td colspan="8" style="text-align: center; padding: 20px;"><div class="spinner"></div> Loading...</td></tr>';
+            }
+            
+            // Disable pagination buttons during load
+            const paginationDiv = document.getElementById('audioProcessedPagination');
+            if (paginationDiv) {
+                paginationDiv.style.opacity = '0.5';
+                paginationDiv.style.pointerEvents = 'none';
+            }
+            
+            fetch(`/api/audio/processed?limit=${audioPageSize}&offset=${offset}&include_transcription=false`)
+                .then(res => res.json())
+                .then(data => {
+                    const total = data.total || data.recordings.length;
+                    
+                    // Update KPI count from container response
+                    const processedCountEl = document.getElementById('audioProcessedCount');
+                    if (processedCountEl) {
+                        processedCountEl.textContent = total;
+                    }
+                    updateAudioTotalCount();
+                    
+                    renderAudioPagination('audioProcessedPagination', 'audioProcessedInfo', 'processed', page, total);
+                    
+                    // Re-enable pagination
+                    if (paginationDiv) {
+                        paginationDiv.style.opacity = '1';
+                        paginationDiv.style.pointerEvents = 'auto';
+                    }
+                    
+                    window.audioLoading = false;
+                    
+                    if (data.recordings.length === 0) {
+                        tbody.innerHTML = '<tr><td colspan="8" style="text-align: center;">No processed recordings</td></tr>';
+                        return;
+                    }
+                    
+                    // Check if user is admin (for showing review buttons)
+                    // Body class is "admin" for admin users, "customer-admin" for customer_admin users
+                    const bodyClasses = document.body.className || '';
+                    const isAdmin = bodyClasses.includes('admin') && !bodyClasses.includes('customer-admin');
+                    
+                    console.log('User role check:', {bodyClasses, isAdmin});
+                    
+                    tbody.innerHTML = data.recordings.map(rec => {
+                        const audioDur = rec.audio_duration || 0;
+                        const procTime = rec.processing_time || rec.translation_time || 0;
+                        const ratio = audioDur > 0 && procTime > 0 ? (audioDur / procTime).toFixed(2) : 'N/A';
+                        const language = rec.detected_language || rec.language_code || rec.source_language || 'Unknown';
+                        const safeFilename = rec.filename.replace(/'/g, "\\'").replace(/"/g, '&quot;').replace(/\//g, '\\/');
+                        
+                        // Build action buttons - admin gets review buttons, customer_admin only gets Listen
+                        let actionButtons = `<button onclick="viewTranslation('${safeFilename}')" style="padding: 6px 10px; background: var(--primary-green); color: white; border: none; border-radius: 4px; cursor: pointer; margin: 2px; font-size: 11px;">Listen</button>`;
+                        
+                        if (isAdmin) {
+                            // Admin can review quality - show Good/Bad buttons only if not already reviewed
+                            const currentRating = rec.quality_rating || 'unreviewed';
+                            const isReviewed = currentRating !== 'unreviewed' && currentRating !== '' && currentRating !== null;
+                            
+                            if (!isReviewed) {
+                                // Show review buttons only if not reviewed yet
+                                actionButtons += `
+                                    <button onclick="rateQuality('${safeFilename}', 'good')" style="padding: 6px 10px; background: #28a745; color: white; border: none; border-radius: 4px; cursor: pointer; margin: 2px; font-size: 11px; font-weight: 600;" title="Mark as Good Quality">✓ Good</button>
+                                    <button onclick="rateQuality('${safeFilename}', 'bad')" style="padding: 6px 10px; background: #dc3545; color: white; border: none; border-radius: 4px; cursor: pointer; margin: 2px; font-size: 11px; font-weight: 600;" title="Mark as Bad Quality">✗ Bad</button>
+                                `;
+                            } else {
+                                // Show review status if already reviewed
+                                const reviewStatus = currentRating === 'good' ? '✓ Reviewed (Good)' : '✗ Reviewed (Bad)';
+                                const reviewColor = currentRating === 'good' ? '#28a745' : '#dc3545';
+                                actionButtons += `
+                                    <span style="padding: 6px 10px; background: ${reviewColor}; color: white; border-radius: 4px; margin: 2px; font-size: 11px; font-weight: 600; display: inline-block;" title="Already reviewed as ${currentRating}">${reviewStatus}</span>
+                                `;
+                            }
+                        }
+                        
+                        return `
+                        <tr>
+                            <td style="max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${rec.filename}">${rec.filename}</td>
+                            <td>${language}</td>
+                            <td>${audioDur > 0 ? formatAudioDuration(audioDur) : 'N/A'}</td>
+                            <td>${procTime > 0 ? procTime.toFixed(1) + 's' : 'N/A'}</td>
+                            <td>${ratio !== 'N/A' ? ratio + 'x' : 'N/A'}</td>
+                            <td>${rec.upload_timestamp ? formatDateTime(rec.upload_timestamp) : 'N/A'}</td>
+                            <td><span class="status-badge status-${rec.quality_rating == 'good' ? 'active' : rec.quality_rating == 'bad' ? 'inactive' : 'neutral'}">${rec.quality_rating || 'unreviewed'}</span></td>
+                            <td>
+                                ${actionButtons}
+                            </td>
+                        </tr>
+                    `;}).join('');
+                })
+                .catch(err => {
+                    console.error('Error loading processed:', err);
+                    if (tbody) {
+                        tbody.innerHTML = '<tr><td colspan="8" style="text-align: center; color: red;">Error loading recordings. Please try again.</td></tr>';
+                    }
+                    const paginationDiv = document.getElementById('audioProcessedPagination');
+                    if (paginationDiv) {
+                        paginationDiv.style.opacity = '1';
+                        paginationDiv.style.pointerEvents = 'auto';
+                    }
+                    window.audioLoading = false;
+                });
+        }
+
+        function loadAudioPending(page = 0) {
+            audioCurrentPage.pending = page;
+            const offset = page * audioPageSize;
+            
+            const tbody = document.getElementById('audioPendingTable');
+            if (tbody) {
+                tbody.innerHTML = '<tr><td colspan="4" style="text-align: center;"><div class="spinner"></div> Loading...</td></tr>';
+            }
+            
+            fetch(`/api/audio/pending?limit=${audioPageSize}&offset=${offset}`)
+                .then(res => res.json())
+                .then(data => {
+                    const tbody = document.getElementById('audioPendingTable');
+                    const total = data.total || data.recordings.length;
+                    
+                    // Update KPI count from container response
+                    document.getElementById('audioPendingCount').textContent = total;
+                    updateAudioTotalCount();
+                    
+                    renderAudioPagination('audioPendingPagination', 'audioPendingInfo', 'pending', page, total);
+                    
+                    if (data.recordings.length === 0) {
+                        tbody.innerHTML = '<tr><td colspan="4" style="text-align: center;">No pending recordings</td></tr>';
+                        return;
+                    }
+                    
+                    tbody.innerHTML = data.recordings.map(rec => `
+                        <tr>
+                            <td>${rec.filename}</td>
+                            <td>${formatDateTime(rec.upload_timestamp)}</td>
+                            <td>${formatFileSize(rec.size)}</td>
+                            <td><span class="status-badge" style="background: #fff3cd; color: #856404;">Pending</span></td>
+                        </tr>
+                    `).join('');
+                })
+                .catch(err => console.error('Error loading pending:', err));
+        }
+
+        function loadAudioFailed(page = 0) {
+            audioCurrentPage.failed = page;
+            const offset = page * audioPageSize;
+            
+            const tbody = document.getElementById('audioFailedTable');
+            if (tbody) {
+                tbody.innerHTML = '<tr><td colspan="5" style="text-align: center;"><div class="spinner"></div> Loading...</td></tr>';
+            }
+            
+            fetch(`/api/audio/failed?limit=${audioPageSize}&offset=${offset}`)
+                .then(res => res.json())
+                .then(data => {
+                    const tbody = document.getElementById('audioFailedTable');
+                    const total = data.total || data.recordings.length;
+                    
+                    // Update KPI count from container response
+                    document.getElementById('audioFailedCount').textContent = total;
+                    updateAudioTotalCount();
+                    
+                    renderAudioPagination('audioFailedPagination', 'audioFailedInfo', 'failed', page, total);
+                    
+                    if (data.recordings.length === 0) {
+                        tbody.innerHTML = '<tr><td colspan="5" style="text-align: center;">No failed recordings</td></tr>';
+                        return;
+                    }
+                    
+                    tbody.innerHTML = data.recordings.map(rec => `
+                        <tr>
+                            <td style="max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${rec.filename}">${rec.filename}</td>
+                            <td>${formatDateTime(rec.failure_timestamp)}</td>
+                            <td><span class="status-badge" style="background: #f8d7da; color: #721c24;">${rec.stage || 'unknown'}</span></td>
+                            <td style="max-width: 300px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${rec.error || 'Unknown error'}">${rec.error || 'Unknown error'}</td>
+                            <td>
+                                <button onclick="retryRecording('${rec.filename.replace(/'/g, "\\'")}')" style="padding: 6px 12px; background: var(--orange); color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 12px;">Retry</button>
+                            </td>
+                        </tr>
+                    `).join('');
+                })
+                .catch(err => console.error('Error loading failed:', err));
+        }
+
+        function loadAudioLanguageBreakdown() {
+            fetch('/api/audio/language-breakdown')
+                .then(res => res.json())
+                .then(data => {
+                    const content = document.getElementById('audioLanguageContent');
+                    
+                    if (data.error) {
+                        content.innerHTML = `<p style="color: red;">Error: ${data.error}</p>`;
+                        return;
+                    }
+                    
+                    const languages = data.language_details || {};
+                    const total = data.total_recordings || 0;
+                    
+                    // Create chart data
+                    const langLabels = Object.keys(languages);
+                    const langCounts = langLabels.map(lang => languages[lang].count);
+                    const langColors = [
+                        'rgba(45, 95, 63, 0.8)',   // primary-green
+                        'rgba(61, 127, 95, 0.8)',  // secondary-green
+                        'rgba(74, 142, 139, 0.8)', // teal
+                        'rgba(232, 128, 59, 0.8)', // orange
+                        'rgba(220, 53, 69, 0.8)',  // red
+                        'rgba(108, 117, 125, 0.8)', // gray
+                    ];
+                    
+                    content.innerHTML = `
+                        <div style="margin-bottom: 30px;">
+                            <div class="kpi-card" style="background: linear-gradient(135deg, var(--primary-green), var(--secondary-green)); margin-bottom: 20px;">
+                                <div class="kpi-value">${total}</div>
+                                <div class="kpi-label">TOTAL RECORDINGS</div>
+                            </div>
+                        </div>
+                        
+                        <!-- Language Chart -->
+                        <div class="chart-container" style="margin-bottom: 30px;">
+                            <div class="chart-title">Recordings by Language</div>
+                            <canvas id="languageBreakdownChart" style="max-height: 400px;"></canvas>
+                        </div>
+                        
+                        <!-- Language Details Table -->
+                        <div class="chart-container">
+                            <div class="chart-title">Language Statistics</div>
+                            <div class="table-container" style="margin-top: 15px;">
+                                <table class="position-table" style="width: 100%;">
+                                    <thead>
+                                        <tr>
+                                            <th>Language</th>
+                                            <th>Count</th>
+                                            <th>Percentage</th>
+                                            <th>Avg Duration</th>
+                                            <th>Avg Processing Time</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        ${langLabels.map(lang => {
+                                            const details = languages[lang];
+                                            const percentage = total > 0 ? ((details.count / total) * 100).toFixed(1) : 0;
+                                            return `
+                                                <tr>
+                                                    <td><strong>${lang}</strong></td>
+                                                    <td>${details.count}</td>
+                                                    <td>${percentage}%</td>
+                                                    <td>${details.avg_duration ? formatAudioDuration(details.avg_duration) : 'N/A'}</td>
+                                                    <td>${details.avg_processing_time ? details.avg_processing_time.toFixed(2) + 's' : 'N/A'}</td>
+                                                </tr>
+                                            `;
+                                        }).join('')}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    `;
+                    
+                    // Create chart
+                    if (langLabels.length > 0) {
+                        const ctx = document.getElementById('languageBreakdownChart').getContext('2d');
+                        new Chart(ctx, {
+                            type: 'bar',
+                            data: {
+                                labels: langLabels,
+                                datasets: [{
+                                    label: 'Number of Recordings',
+                                    data: langCounts,
+                                    backgroundColor: langColors.slice(0, langLabels.length),
+                                    borderColor: langColors.slice(0, langLabels.length).map(c => c.replace('0.8', '1')),
+                                    borderWidth: 2
+                                }]
+                            },
+                            options: {
+                                responsive: true,
+                                maintainAspectRatio: true,
+                                plugins: {
+                                    legend: {
+                                        display: false
+                                    },
+                                    title: {
+                                        display: true,
+                                        text: 'Recordings Distribution by Language',
+                                        font: {
+                                            size: 16,
+                                            weight: 'bold'
+                                        }
+                                    }
+                                },
+                                scales: {
+                                    y: {
+                                        beginAtZero: true,
+                                        ticks: {
+                                            stepSize: 1
+                                        }
+                                    }
+                                }
+                            }
+                        });
+                    }
+                })
+                .catch(err => {
+                    console.error('Error loading language breakdown:', err);
+                    document.getElementById('audioLanguageContent').innerHTML = '<p style="color: red;">Error loading language breakdown data</p>';
+                });
+        }
+
+        function loadAudioAnalytics() {
+            const content = document.getElementById('audioAnalyticsContent');
+            if (content) {
+                content.innerHTML = '<p style="text-align: center; padding: 20px;"><div class="spinner"></div> Loading analytics...</p>';
+            }
+            
+            // Add cache-busting parameter to ensure fresh data
+            const cacheBuster = new Date().getTime();
+            fetch(`/api/audio/analytics?days=30&_t=${cacheBuster}`)
+                .then(res => res.json())
+                .then(data => {
+                    console.log('Analytics data loaded:', data);
+                    console.log('Quality breakdown:', data.quality_breakdown);
+                    
+                    if (!content) return;
+                    
+                    // Calculate additional metrics
+                    const failureRate = data.failure_rate || (100 - (data.success_rate || 0));
+                    const totalProcessed = data.total_processed || 0;
+                    const totalFailed = data.total_failed || 0;
+                    const totalRecordings = data.total_recordings || (totalProcessed + totalFailed);
+                    
+                    content.innerHTML = `
+                        <!-- Summary KPIs -->
+                        <div class="kpi-row" style="margin-bottom: 30px;">
+                            <div class="kpi-card" style="background: linear-gradient(135deg, #28a745, #20c997);">
+                                <div class="kpi-value">${totalProcessed}</div>
+                                <div class="kpi-label">TOTAL PROCESSED</div>
+                            </div>
+                            <div class="kpi-card" style="background: linear-gradient(135deg, #dc3545, #c82333);">
+                                <div class="kpi-value">${totalFailed}</div>
+                                <div class="kpi-label">TOTAL FAILED</div>
+                            </div>
+                            <div class="kpi-card" style="background: ${data.success_rate >= 90 ? 'linear-gradient(135deg, #28a745, #20c997)' : data.success_rate >= 70 ? 'linear-gradient(135deg, #ffc107, #ff9800)' : 'linear-gradient(135deg, #dc3545, #c82333)'};">
+                                <div class="kpi-value">${data.success_rate || 0}%</div>
+                                <div class="kpi-label">SUCCESS RATE</div>
+                            </div>
+                            <div class="kpi-card" style="background: linear-gradient(135deg, #dc3545, #ff6b6b);">
+                                <div class="kpi-value">${failureRate.toFixed(1)}%</div>
+                                <div class="kpi-label">FAILURE RATE</div>
+                            </div>
+                        </div>
+                        
+                        <!-- Processing Metrics -->
+                        <div class="kpi-row" style="margin-bottom: 30px;">
+                            <div class="kpi-card" style="background: linear-gradient(135deg, var(--teal), var(--primary-green));">
+                                <div class="kpi-value">${data.avg_processing_time || 0}s</div>
+                                <div class="kpi-label">AVG PROCESSING TIME</div>
+                            </div>
+                            <div class="kpi-card" style="background: linear-gradient(135deg, #6c757d, #495057);">
+                                <div class="kpi-value">${data.avg_audio_duration ? formatAudioDuration(data.avg_audio_duration) : 'N/A'}</div>
+                                <div class="kpi-label">AVG AUDIO DURATION</div>
+                            </div>
+                            <div class="kpi-card" style="background: linear-gradient(135deg, var(--secondary-green), var(--primary-green));">
+                                <div class="kpi-value">${data.processing_ratio || 0}x</div>
+                                <div class="kpi-label">SPEED RATIO (Audio/Processing)</div>
+                            </div>
+                            <div class="kpi-card" style="background: linear-gradient(135deg, #20c997, #28a745);">
+                                <div class="kpi-value">${data.quality_score || 0}%</div>
+                                <div class="kpi-label">QUALITY SCORE</div>
+                            </div>
+                        </div>
+                        
+                        <!-- Quality Breakdown -->
+                        <div class="chart-container" style="margin-bottom: 30px;">
+                            <div class="chart-title">Quality Review Breakdown</div>
+                            <div style="display: flex; gap: 20px; flex-wrap: wrap; margin-top: 15px;">
+                                <div style="flex: 1; min-width: 150px; background: #d4edda; padding: 20px; border-radius: 8px; text-align: center;">
+                                    <div style="font-size: 32px; font-weight: bold; color: #155724;">${data.quality_breakdown?.good || 0}</div>
+                                    <div style="color: #155724;">Good</div>
+                                </div>
+                                <div style="flex: 1; min-width: 150px; background: #f8d7da; padding: 20px; border-radius: 8px; text-align: center;">
+                                    <div style="font-size: 32px; font-weight: bold; color: #721c24;">${data.quality_breakdown?.bad || 0}</div>
+                                    <div style="color: #721c24;">Bad</div>
+                                </div>
+                                <div style="flex: 1; min-width: 150px; background: #fff3cd; padding: 20px; border-radius: 8px; text-align: center;">
+                                    <div style="font-size: 32px; font-weight: bold; color: #856404;">${data.quality_breakdown?.unreviewed || 0}</div>
+                                    <div style="color: #856404;">Unreviewed</div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Language Breakdown -->
+                        <div class="chart-container" style="margin-bottom: 30px;">
+                            <div class="chart-title">Language Breakdown</div>
+                            <div class="table-container" style="margin-top: 15px;">
+                                <table class="position-table" style="width: 100%;">
+                                    <thead>
+                                        <tr>
+                                            <th>Language</th>
+                                            <th>Count</th>
+                                            <th>Percentage</th>
+                                            <th>Avg Processing Time</th>
+                                            <th>Total Processing Time</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        ${Object.entries(data.language_breakdown || {}).map(([lang, info]) => {
+                                            const percentage = totalProcessed > 0 ? ((info.count / totalProcessed) * 100).toFixed(1) : 0;
+                                            return `
+                                            <tr>
+                                                <td><strong>${lang}</strong></td>
+                                                <td>${info.count}</td>
+                                                <td>
+                                                    <div style="background: #e9ecef; border-radius: 4px; overflow: hidden;">
+                                                        <div style="background: var(--primary-green); width: ${percentage}%; height: 20px; display: flex; align-items: center; justify-content: center; color: white; font-size: 11px;">
+                                                            ${percentage}%
+                                                        </div>
+                                                    </div>
+                                                </td>
+                                                <td>${info.avg_processing_time || 0}s</td>
+                                                <td>${(info.total_processing_time || 0).toFixed(1)}s</td>
+                                            </tr>
+                                        `;}).join('')}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                        
+                        <!-- Processing Time Trend (if available) -->
+                        ${data.processing_time_trend && data.processing_time_trend.length > 0 ? `
+                        <div class="chart-container">
+                            <div class="chart-title">Processing Time Trend (Last 30 Days)</div>
+                            <div class="table-container" style="margin-top: 15px;">
+                                <table class="position-table" style="width: 100%;">
+                                    <thead>
+                                        <tr>
+                                            <th>Date</th>
+                                            <th>Recordings</th>
+                                            <th>Avg Processing Time</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        ${data.processing_time_trend.slice(-10).map(day => `
+                                            <tr>
+                                                <td>${day.date}</td>
+                                                <td>${day.count || 0}</td>
+                                                <td>${day.avg_processing_time || 0}s</td>
+                                            </tr>
+                                        `).join('')}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                        ` : ''}
+                    `;
+                })
+                .catch(err => {
+                    console.error('Error loading analytics:', err);
+                    document.getElementById('audioAnalyticsContent').innerHTML = '<p style="color: red;">Error loading analytics data</p>';
+                });
+        }
+
+        function viewTranslation(filename) {
+            fetch(`/api/audio/detail/${encodeURIComponent(filename)}?container=processed`)
+                .then(res => res.json())
+                .then(data => {
+                    document.getElementById('translationModal').style.display = 'block';
+                    document.getElementById('modalFilename').textContent = filename;
+                    document.getElementById('modalAudio').src = data.url;
+                    
+                    // Check user role from body class
+                    const isCustomerAdmin = document.body.classList.contains('customer-admin');
+                    
+                    if (data.transcription) {
+                        const t = data.transcription;
+                        const audioDur = t.audio_duration || 0;
+                        const procTime = t.translation_time || 0;
+                        const ratio = audioDur > 0 && procTime > 0 ? (audioDur / procTime).toFixed(2) : 'N/A';
+                        
+                        // Show original transcription
+                        document.getElementById('modalTranscription').textContent = t.transcription || t.original_text || 'Original transcription not available';
+                        
+                        // Hide translation section for customer_admin
+                        const translationSection = document.getElementById('translationSection');
+                        if (isCustomerAdmin) {
+                            translationSection.style.display = 'none';
+                        } else {
+                            translationSection.style.display = 'block';
+                            // Show English translation for admin
+                            document.getElementById('modalTranslation').textContent = t.translation || 'No translation available';
+                            document.getElementById('modalTranslation').style.color = '';
+                            document.getElementById('modalTranslation').style.fontStyle = '';
+                        }
+                        
+                        // Show metadata in grid format
+                        document.getElementById('modalMetadata').innerHTML = `
+                            <div style="background: #f8f9fa; padding: 15px; border-radius: 8px;">
+                                <strong>Language</strong><br>
+                                <span style="font-size: 18px; color: var(--primary-green);">${t.detected_language || 'Unknown'}</span>
+                                <span style="color: #666; font-size: 12px;">(${t.language_code || 'N/A'})</span>
+                            </div>
+                            <div style="background: #f8f9fa; padding: 15px; border-radius: 8px;">
+                                <strong>Confidence</strong><br>
+                                <span style="font-size: 18px; color: var(--primary-green);">${t.language_confidence ? (t.language_confidence * 100).toFixed(1) + '%' : 'N/A'}</span>
+                            </div>
+                            <div style="background: #f8f9fa; padding: 15px; border-radius: 8px;">
+                                <strong>Audio Duration</strong><br>
+                                <span style="font-size: 18px; color: var(--primary-green);">${audioDur ? formatAudioDuration(audioDur) : 'N/A'}</span>
+                            </div>
+                            <div style="background: #f8f9fa; padding: 15px; border-radius: 8px;">
+                                <strong>Processing Time</strong><br>
+                                <span style="font-size: 18px; color: var(--primary-green);">${procTime ? procTime.toFixed(2) + 's' : 'N/A'}</span>
+                            </div>
+                            <div style="background: #f8f9fa; padding: 15px; border-radius: 8px;">
+                                <strong>Speed Ratio</strong><br>
+                                <span style="font-size: 18px; color: var(--primary-green);">${ratio}x</span>
+                            </div>
+                            <div style="background: #f8f9fa; padding: 15px; border-radius: 8px;">
+                                <strong>Word Count</strong><br>
+                                <span style="font-size: 18px; color: var(--primary-green);">${t.word_count || 'N/A'}</span>
+                            </div>
+                        `;
+                    } else {
+                        document.getElementById('modalTranscription').textContent = 'Original transcription not available';
+                        document.getElementById('modalTranslation').textContent = 'Translation not available';
+                        document.getElementById('modalMetadata').innerHTML = '<div style="background: #f8f9fa; padding: 15px; border-radius: 8px; grid-column: 1/-1;">No metadata available</div>';
+                    }
+                })
+                .catch(err => {
+                    console.error('Error loading translation:', err);
+                    alert('Error loading translation');
+                });
+        }
+
+        function closeTranslationModal() {
+            document.getElementById('translationModal').style.display = 'none';
+            const audio = document.getElementById('modalAudio');
+            audio.pause();
+            audio.src = '';
+        }
+
+        function rateQuality(filename, rating) {
+            if (!confirm(`Mark this recording as "${rating === 'good' ? 'Good' : 'Bad'}" quality?\n\nFile: ${filename}`)) {
+                return;
+            }
+            
+            const notes = rating === 'bad' ? prompt('Optional notes about the issue:') || '' : '';
+            
+            console.log('Submitting quality feedback:', {filename, rating, notes});
+            
+            fetch('/api/audio/quality-feedback', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({filename, rating, notes})
+            })
+            .then(res => res.json())
+            .then(result => {
+                console.log('Quality feedback response:', result);
+                if (result.success) {
+                    // Show success message
+                    const message = result.transcription_updated 
+                        ? `Quality feedback recorded as "${rating}"! Updated in both recording and transcription metadata.`
+                        : `Quality feedback recorded as "${rating}"!`;
+                    
+                    // Reload all relevant data to update counts
+                    // Reload processed recordings to show updated quality rating (buttons will be disabled)
+                    setTimeout(() => {
+                        loadAudioProcessed(audioCurrentPage.processed);
+                    }, 500);
+                    
+                    // Always reload analytics to update quality breakdown counts (good/bad/unreviewed)
+                    // Add delays to ensure Azure metadata has propagated
+                    setTimeout(() => {
+                        loadAudioAnalytics();
+                    }, 1500);
+                    
+                    // Also reload again after longer delay to ensure metadata is fully propagated
+                    setTimeout(() => {
+                        loadAudioAnalytics();
+                    }, 3000);
+                    
+                    // Also reload if analytics tab is currently active
+                    const activeTab = document.querySelector('.audio-tab-btn.active');
+                    if (activeTab) {
+                        const activeTabName = activeTab.getAttribute('data-audio-tab');
+                        if (activeTabName === 'analytics') {
+                            setTimeout(() => {
+                                loadAudioAnalytics();
+                            }, 2000);
+                        }
+                    }
+                    
+                    // Show success notification
+                    alert(message);
+                } else {
+                    alert('Error: ' + (result.error || 'Failed to save quality feedback'));
+                }
+            })
+            .catch(err => {
+                console.error('Error rating quality:', err);
+                alert('Error recording feedback: ' + err.message);
+            });
+        }
+
+        function retryRecording(filename) {
+            if (!confirm(`Retry processing for:\n${filename}?`)) return;
+            
+            fetch(`/api/audio/retry/${encodeURIComponent(filename)}`, {method: 'POST'})
+                .then(res => res.json())
+                .then(result => {
+                    if (result.success) {
+                        alert('Recording moved to pending queue for reprocessing!');
+                        loadAudioFailed();
+                        loadAudioPending();
+                    } else {
+                        alert('Error: ' + result.error);
+                    }
+                })
+                .catch(err => {
+                    console.error('Error retrying:', err);
+                    alert('Error retrying recording');
+                });
+        }
+
+        function formatDateTime(dateString) {
+            if (!dateString) return 'N/A';
+            return new Date(dateString).toLocaleString();
+        }
+
+        function formatFileSize(bytes) {
+            if (!bytes) return 'N/A';
+            const sizes = ['B', 'KB', 'MB', 'GB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(1024));
+            return (bytes / Math.pow(1024, i)).toFixed(2) + ' ' + sizes[i];
+        }
+
+        function formatAudioDuration(seconds) {
+            if (!seconds) return 'N/A';
+            const mins = Math.floor(seconds / 60);
+            const secs = Math.floor(seconds % 60);
+            return `${mins}:${secs.toString().padStart(2, '0')}`;
+        }
+
         // Initialize
         document.addEventListener('DOMContentLoaded', function() {
+            setupNavigation();
             loadFilterOptions();
             loadHomeData();
         });

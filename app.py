@@ -7,6 +7,27 @@ from datetime import datetime, timedelta
 from functools import wraps
 import auth
 
+# Import audio monitor
+sys.path.append(os.path.join(os.path.dirname(__file__), '..', 'backend'))
+
+try:
+    from dotenv import load_dotenv
+    backend_dir = os.path.join(os.path.dirname(__file__), '..', 'backend')
+    env_file = os.path.join(backend_dir, '.env')
+    if os.path.exists(env_file):
+        load_dotenv(env_file)
+        print(f"✅ Loaded environment from: {env_file}")
+except ImportError:
+    print("⚠️  python-dotenv not installed")
+
+try:
+    from audio_monitor import AudioMonitor
+    AUDIO_MONITOR_ENABLED = True
+    print("✅ Audio monitoring enabled")
+except ImportError as e:
+    AUDIO_MONITOR_ENABLED = False
+    print(f"⚠️  Audio monitoring not available: {e}")
+
 # try to solve Azure issue
 from urllib.parse import urlencode
 
@@ -14,6 +35,10 @@ from flask import Flask, jsonify, redirect, render_template, request, session, u
 from flask_bcrypt import Bcrypt
 
 app = Flask(__name__)
+
+@app.route('/favicon.ico')
+def favicon():
+    return '', 204  # Return empty response with No Content status
 app.config["SECRET_KEY"] = os.environ.get("SECRET_KEY", "your_super_secret_key")
 bcrypt = Bcrypt(app)
 
@@ -1683,8 +1708,8 @@ def get_db_stats():
 
         date_range = conn.execute("""
             SELECT
-                MIN(date_recorded) as min_date,
-                MAX(date_recorded) as max_date
+                MIN(created_at) as min_date,
+                MAX(created_at) as max_date
             FROM fact_conversations
         """).fetchone()
 
@@ -1786,6 +1811,237 @@ def index():
     user_role = session.get("user_role", "customer_admin")
     return render_template("dashboard.html", user_role=user_role)
 
+
+################################################
+
+# ==================== AUDIO MONITORING MODULE APIs ====================
+
+@app.route("/api/audio/overview")
+@login_required
+def get_audio_overview():
+    if not AUDIO_MONITOR_ENABLED:
+        return jsonify({"error": "Audio monitoring not enabled", "pending": 0, "processed": 0, "failed": 0}), 503
+    try:
+        monitor = AudioMonitor()
+        stats = monitor.get_overview_stats()
+        return jsonify(stats)
+    except Exception as e:
+        print(f"Audio overview error: {e}")
+        return jsonify({"error": str(e), "pending": 0, "processed": 0, "failed": 0}), 500
+
+@app.route("/api/audio/pending")
+@login_required
+def get_audio_pending():
+    if not AUDIO_MONITOR_ENABLED:
+        return jsonify({"error": "Audio monitoring not enabled"}), 503
+    try:
+        limit = int(request.args.get("limit", 50))
+        offset = int(request.args.get("offset", 0))
+        monitor = AudioMonitor()
+        result = monitor.get_pending_recordings(limit=limit, offset=offset)
+        return jsonify(result)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route("/api/audio/processed")
+@login_required
+def get_audio_processed():
+    if not AUDIO_MONITOR_ENABLED:
+        return jsonify({"error": "Audio monitoring not enabled"}), 503
+    try:
+        limit = int(request.args.get("limit", 50))
+        offset = int(request.args.get("offset", 0))
+        quality_filter = request.args.get("quality")
+        language_filter = request.args.get("language")
+        # Only include transcription data if explicitly requested (for detail view)
+        include_transcription = request.args.get("include_transcription", "false").lower() == "true"
+        
+        monitor = AudioMonitor()
+        result = monitor.get_processed_recordings(
+            limit=limit, offset=offset,
+            quality_filter=quality_filter,
+            language_filter=language_filter,
+            include_transcription=include_transcription
+        )
+        
+        # Hide translations for customer_admin
+        user_role = session.get("user_role", "customer_admin")
+        if user_role == "customer_admin":
+            for recording in result.get("recordings", []):
+                # Remove translation but keep transcription
+                recording.pop("translation", None)
+                # Keep original_transcription but remove translation
+                if "transcription" in recording:
+                    # transcription field contains the translation, remove it
+                    recording["transcription"] = ""
+        
+        return jsonify(result)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route("/api/audio/failed")
+@login_required
+def get_audio_failed():
+    if not AUDIO_MONITOR_ENABLED:
+        return jsonify({"error": "Audio monitoring not enabled"}), 503
+    try:
+        limit = int(request.args.get("limit", 50))
+        offset = int(request.args.get("offset", 0))
+        monitor = AudioMonitor()
+        result = monitor.get_failed_recordings(limit=limit, offset=offset)
+        return jsonify(result)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route("/api/audio/analytics")
+@login_required
+def get_audio_analytics():
+    if not AUDIO_MONITOR_ENABLED:
+        return jsonify({"error": "Audio monitoring not enabled"}), 503
+    try:
+        days = int(request.args.get("days", 30))
+        monitor = AudioMonitor()
+        analytics = monitor.get_analytics(days=days)
+        return jsonify(analytics)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route("/api/audio/detail/<path:filename>")
+@login_required
+def get_audio_recording_detail(filename):
+    if not AUDIO_MONITOR_ENABLED:
+        return jsonify({"error": "Audio monitoring not enabled"}), 503
+    try:
+        container = request.args.get("container", "processed")
+        monitor = AudioMonitor()
+        detail = monitor.get_recording_detail(filename, container=container)
+        
+        # Hide translations for customer_admin
+        user_role = session.get("user_role", "customer_admin")
+        if user_role == "customer_admin":
+            # Remove translation from transcription data
+            if detail.get("transcription"):
+                if isinstance(detail["transcription"], dict):
+                    detail["transcription"].pop("translation", None)
+                    detail["transcription"]["translation"] = ""  # Set to empty string
+                elif isinstance(detail["transcription"], str):
+                    detail["transcription"] = ""
+        
+        return jsonify(detail)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route("/api/audio/quality-feedback", methods=["POST"])
+@login_required
+def update_audio_quality_feedback():
+    if not AUDIO_MONITOR_ENABLED:
+        return jsonify({"error": "Audio monitoring not enabled"}), 503
+    try:
+        data = request.json
+        filename = data.get("filename")
+        rating = data.get("rating")
+        notes = data.get("notes", "")
+        reviewer = session.get("username", "admin")
+        
+        if not filename or not rating:
+            return jsonify({"error": "filename and rating are required"}), 400
+        
+        monitor = AudioMonitor()
+        result = monitor.update_quality_feedback(
+            filename=filename, rating=rating,
+            reviewer=reviewer, notes=notes
+        )
+        return jsonify(result)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route("/api/audio/retry/<path:filename>", methods=["POST"])
+@login_required
+def retry_audio_failed(filename):
+    if not AUDIO_MONITOR_ENABLED:
+        return jsonify({"error": "Audio monitoring not enabled"}), 503
+    try:
+        monitor = AudioMonitor()
+        result = monitor.retry_failed_recording(filename)
+        return jsonify(result)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route("/api/audio/language-breakdown")
+@login_required
+def get_audio_language_breakdown():
+    """Get language breakdown for customer_admin - optimized to use metadata only"""
+    if not AUDIO_MONITOR_ENABLED:
+        return jsonify({"error": "Audio monitoring not enabled"}), 503
+    try:
+        monitor = AudioMonitor()
+        
+        # Use optimized method - get metadata only, no transcription downloads
+        # Fetch in batches to avoid memory issues
+        language_counts = {}
+        language_details = {}
+        total_recordings = 0
+        batch_size = 500
+        offset = 0
+        
+        while True:
+            # Get batch without transcription data (much faster)
+            processed_result = monitor.get_processed_recordings(
+                limit=batch_size, 
+                offset=offset,
+                include_transcription=False  # Don't download transcription JSON
+            )
+            recordings = processed_result.get("recordings", [])
+            
+            if not recordings:
+                break
+            
+            # Process batch
+            for rec in recordings:
+                lang = rec.get("source_language") or rec.get("detected_language") or rec.get("language_code") or "Unknown"
+                
+                if lang not in language_counts:
+                    language_counts[lang] = 0
+                    language_details[lang] = {
+                        "count": 0,
+                        "total_duration": 0,
+                        "avg_processing_time": 0,
+                        "processing_times": []
+                    }
+                
+                language_counts[lang] += 1
+                language_details[lang]["count"] += 1
+                total_recordings += 1
+                
+                if rec.get("audio_duration"):
+                    language_details[lang]["total_duration"] += rec.get("audio_duration", 0)
+                
+                if rec.get("processing_time"):
+                    language_details[lang]["processing_times"].append(rec.get("processing_time", 0))
+            
+            # Check if we got all records
+            if len(recordings) < batch_size:
+                break
+            
+            offset += batch_size
+        
+        # Calculate averages
+        for lang, details in language_details.items():
+            if details["count"] > 0:
+                details["avg_duration"] = round(details["total_duration"] / details["count"], 2)
+            if details["processing_times"]:
+                details["avg_processing_time"] = round(
+                    sum(details["processing_times"]) / len(details["processing_times"]), 2
+                )
+            del details["processing_times"]  # Remove temporary list
+        
+        return jsonify({
+            "languages": language_counts,
+            "language_details": language_details,
+            "total_recordings": total_recordings
+        })
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 ################################################
 
