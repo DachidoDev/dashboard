@@ -112,21 +112,6 @@ The dashboard has two types of users with different access levels:
 
 ## 🔒 Role-Based Access Control
 
-### Access Comparison Table
-
-| Feature | Admin | Customer Admin |
-|---------|-------|----------------|
-| HOME Module | ✅ Full Access | ✅ Full Access |
-| MARKETING Module | ✅ Full Access | ✅ Full Access |
-| OPERATIONS Module | ✅ Full Access | ✅ Full Access |
-| ENGAGEMENT Module | ✅ Full Access | ✅ Full Access |
-| ADMIN - User Tables | ✅ Visible | ✅ Visible |
-| ADMIN - Active Users KPI | ✅ Visible | ✅ Visible |
-| ADMIN - Date Coverage KPI | ✅ Visible | ✅ Visible |
-| ADMIN - Total Records KPI | ✅ Visible | ❌ Hidden |
-| ADMIN - Data Completeness KPI | ✅ Visible | ❌ Hidden |
-| ADMIN - Database Statistics | ✅ Visible | ❌ Hidden |
-| ADMIN - Completeness Metrics | ✅ Visible | ❌ Hidden |
 
 ---
 
