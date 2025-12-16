@@ -1,0 +1,3420 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Coromandel - FieldForce Dashboard</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/wordcloud2.js/1.2.2/wordcloud2.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        :root {
+            --primary-green: #2d5f3f;
+            --secondary-green: #3d7f5f;
+            --orange: #e8803b;
+            --teal: #4a8e8b;
+            --light-gray: #f5f5f5;
+            --dark-gray: #333;
+            --border-color: #ddd;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: var(--light-gray);
+            color: var(--dark-gray);
+        }
+
+        .header {
+            background-color: white;
+            padding: 15px 30px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+
+        .logo {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .logo-icon {
+            width: 30px;
+            height: 30px;
+            background-color: var(--primary-green);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: bold;
+            font-size: 18px;
+        }
+
+        .logo-text {
+            font-size: 20px;
+            font-weight: 600;
+            color: var(--dark-gray);
+        }
+
+        .nav-menu {
+            display: flex;
+            gap: 30px;
+        }
+
+        .nav-item {
+            padding: 8px 16px;
+            cursor: pointer;
+            color: var(--dark-gray);
+            font-weight: 500;
+            border-bottom: 3px solid transparent;
+            transition: all 0.3s;
+        }
+
+        .nav-item:hover, .nav-item.active {
+            color: var(--primary-green);
+            border-bottom-color: var(--primary-green);
+        }
+
+        .fieldforce-badge {
+            background: linear-gradient(135deg, var(--orange), #f5a742);
+            color: white;
+            padding: 8px 20px;
+            border-radius: 5px;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .breadcrumb {
+            background-color: var(--primary-green);
+            color: white;
+            padding: 12px 30px;
+            font-size: 14px;
+        }
+
+        .filters {
+            background-color: white;
+            padding: 15px 30px;
+            display: flex;
+            gap: 20px;
+            align-items: center;
+            border-bottom: 1px solid var(--border-color);
+            flex-wrap: wrap;
+        }
+
+        .filter-label {
+            font-weight: 600;
+            font-size: 18px;
+            margin-right: 20px;
+        }
+
+        .filter-group {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .filter-select {
+            padding: 8px 15px;
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+            background-color: white;
+            font-size: 14px;
+            cursor: pointer;
+            min-width: 150px;
+        }
+
+        .main-content {
+            padding: 30px;
+            max-width: 1600px;
+            margin: 0 auto;
+        }
+
+        .module-view {
+            display: none;
+        }
+
+        .module-view.active {
+            display: block;
+        }
+
+        .kpi-row {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+
+        .kpi-card {
+            background-color: white;
+            padding: 25px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            text-align: center;
+        }
+
+        .kpi-card.alert {
+            background-color: var(--orange);
+            color: white;
+        }
+
+        .kpi-card.activity {
+            background-color: #f5c563;
+            color: white;
+        }
+
+        .kpi-card.health {
+            background-color: var(--teal);
+            color: white;
+        }
+
+        .kpi-value {
+            font-size: 48px;
+            font-weight: bold;
+            margin-bottom: 10px;
+        }
+
+        .kpi-label {
+            font-size: 14px;
+            font-weight: 500;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .chart-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(500px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+
+        .chart-container {
+            background-color: white;
+            padding: 25px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+
+        .chart-container.full-width {
+            grid-column: 1 / -1;
+        }
+
+        .chart-title {
+            font-size: 16px;
+            font-weight: 600;
+            margin-bottom: 20px;
+            color: var(--dark-gray);
+            border-bottom: 2px solid var(--primary-green);
+            padding-bottom: 10px;
+        }
+
+        .chart-wrapper {
+            position: relative;
+            height: 300px;
+        }
+
+        .chart-wrapper.large {
+            height: 500px;
+        }
+
+        .chart-wrapper.small {
+            height: 200px;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            background-color: white;
+        }
+
+        thead {
+            background-color: var(--primary-green);
+            color: white;
+        }
+
+        th, td {
+            padding: 12px;
+            text-align: left;
+            border-bottom: 1px solid var(--border-color);
+            font-size: 13px;
+        }
+
+        th {
+            font-weight: 600;
+            font-size: 14px;
+        }
+
+        tbody tr:hover {
+            background-color: #f9f9f9;
+        }
+
+        .table-container {
+            max-height: 400px;
+            overflow-y: auto;
+        }
+
+        .competitive-section {
+            display: grid;
+            grid-template-columns: 2fr 1fr;
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+
+        .competitive-table {
+            background-color: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+
+        .position-table {
+            width: 100%;
+        }
+
+        .position-table th {
+            background-color: var(--primary-green);
+            color: white;
+        }
+
+        .brand-circle {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            display: inline-block;
+            margin-right: 8px;
+        }
+
+        .doughnut-container {
+            position: relative;
+            height: 250px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .loading {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 40px;
+        }
+
+        .spinner {
+            border: 4px solid var(--light-gray);
+            border-top: 4px solid var(--primary-green);
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .insight-block {
+            background-color: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            margin-top: 20px;
+        }
+
+        .insight-title {
+            font-size: 14px;
+            font-weight: 600;
+            color: var(--dark-gray);
+            margin-bottom: 15px;
+        }
+
+        .user-notes {
+            min-height: 100px;
+            padding: 15px;
+            background-color: var(--light-gray);
+            border-radius: 4px;
+            color: #888;
+            font-style: italic;
+        }
+
+        .distribution-bars {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            padding: 20px 0;
+        }
+
+        .dist-bar {
+            height: 30px;
+            border-radius: 4px;
+            display: flex;
+            align-items: center;
+            padding: 0 15px;
+            color: white;
+            font-weight: 500;
+            font-size: 14px;
+        }
+
+        .dist-bar.positive {
+            background-color: var(--primary-green);
+        }
+
+        .dist-bar.neutral {
+            background-color: var(--teal);
+        }
+
+        .dist-bar.negative {
+            background-color: var(--orange);
+        }
+
+        #wordCloudCanvas, #cropWordCloudCanvas {
+            width: 100%;
+            height: 300px;
+        }
+
+        .status-badge {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: 600;
+        }
+
+        .status-active {
+            background-color: #d4edda;
+            color: #155724;
+        }
+
+        .status-inactive {
+            background-color: #f8d7da;
+            color: #721c24;
+        }
+
+        .kpi-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+
+        .kpi-small {
+            background: linear-gradient(135deg, #fff, #f8f9fa);
+            padding: 25px;
+            border-radius: 8px;
+            text-align: center;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            border-left: 4px solid var(--primary-green);
+        }
+
+        .kpi-small-value {
+            font-size: 32px;
+            font-weight: bold;
+            color: var(--primary-green);
+            margin-bottom: 8px;
+        }
+
+        .kpi-small-label {
+            font-size: 13px;
+            color: #666;
+            font-weight: 500;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        /* Heatmap Styles */
+        .heatmap-container {
+            overflow-x: auto;
+            overflow-y: auto;
+            max-height: 500px;
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+        }
+
+        .heatmap-table {
+            border-collapse: collapse;
+            font-size: 11px;
+            min-width: 100%;
+        }
+
+        .heatmap-table th {
+            background-color: var(--primary-green);
+            color: white;
+            padding: 10px 6px;
+            text-align: center;
+            position: sticky;
+            top: 0;
+            z-index: 10;
+            font-size: 10px;
+            min-width: 70px;
+            max-width: 100px;
+            word-wrap: break-word;
+            border: 1px solid #2d5f3f;
+        }
+
+        .heatmap-table th.row-header {
+            left: 0;
+            z-index: 11;
+            text-align: left;
+            min-width: 120px;
+            background-color: var(--primary-green);
+        }
+
+        .heatmap-table td {
+            padding: 10px;
+            text-align: center;
+            border: 1px solid #e0e0e0;
+            min-width: 70px;
+            font-weight: 600;
+            transition: all 0.2s;
+            cursor: pointer;
+        }
+
+        .heatmap-table td.row-header {
+            background-color: #f5f5f5;
+            font-weight: 600;
+            text-align: left;
+            position: sticky;
+            left: 0;
+            z-index: 5;
+            border-right: 2px solid var(--border-color);
+        }
+
+        .heatmap-table td:not(.row-header):hover {
+            transform: scale(1.05);
+            box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+            z-index: 3;
+        }
+
+        .custom-date-inputs {
+            display: none;
+            gap: 10px;
+            align-items: center;
+        }
+
+        .custom-date-inputs.active {
+            display: flex;
+        }
+
+        .date-input {
+            padding: 6px 10px;
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+            font-size: 13px;
+        }
+
+        @media (max-width: 1200px) {
+            .chart-grid {
+                grid-template-columns: 1fr;
+            }
+            
+            .competitive-section {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        @media (max-width: 768px) {
+            .nav-menu {
+                flex-wrap: wrap;
+                gap: 15px;
+            }
+
+            .filters {
+                flex-wrap: wrap;
+            }
+
+            .kpi-row {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        /* Role-based visibility */
+        .admin-only {
+            display: block;
+        }
+
+        body.customer-admin .admin-only {
+            display: none !important;
+        }
+    </style>
+</head>
+<body class="{{ 'admin' if user_role == 'admin' else 'customer-admin' }}">
+    <div class="header">
+        <div class="logo">
+            <div class="logo-icon">C</div>
+            <span class="logo-text">Coromandel</span>
+        </div>
+        <nav class="nav-menu">
+            <div class="nav-item active" data-module="home">HOME</div>
+            <div class="nav-item" data-module="marketing">MARKETING</div>
+            <div class="nav-item" data-module="operations">OPERATIONS</div>
+            <div class="nav-item" data-module="engagement">ENGAGEMENT</div>
+            <div class="nav-item" data-module="admin">ADMIN</div>
+            <div class="nav-item" data-module="audio">AUDIO MONITOR</div>
+        </nav>
+        <div style="display: flex; align-items: center; gap: 20px;">
+            <div style="font-size: 14px; color: #666;">
+                <strong>{{ session.username }}</strong>
+                <span style="background-color: {{ '#2d5f3f' if user_role == 'admin' else '#4a8e8b' }}; color: white; padding: 2px 8px; border-radius: 3px; font-size: 11px; margin-left: 5px;">
+                    {{ 'ADMIN' if user_role == 'admin' else 'CUSTOMER' }}
+                </span>
+            </div>
+            <div class="fieldforce-badge">
+                ⚡ FieldForce
+            </div>
+            <a href="/logout" style="color: #666; text-decoration: none; font-size: 14px; padding: 8px 16px; border: 1px solid #ddd; border-radius: 4px; transition: all 0.3s;">Logout</a>
+        </div>
+    </div>
+
+    <div class="breadcrumb">
+        HOME / <span id="current-module">Market Pulse</span>
+    </div>
+
+    <div class="filters">
+        <span class="filter-label">MARKET PULSE</span>
+        <div class="filter-group">
+            <select class="filter-select" id="dateFilter">
+                <option value="7">LAST 7 DAYS</option>
+                <option value="30" selected>LAST 30 DAYS</option>
+                <option value="90">LAST 90 DAYS</option>
+                <option value="365">LAST 12 MONTHS</option>
+                <option value="all">ALL TIME</option>
+                <option value="custom">CUSTOM DATE RANGE</option>
+            </select>
+        </div>
+        <div class="custom-date-inputs" id="customDateInputs">
+            <input type="date" class="date-input" id="startDate">
+            <span>to</span>
+            <input type="date" class="date-input" id="endDate">
+        </div>
+        <div class="filter-group">
+            <select class="filter-select" id="cropTypeFilter">
+                <option value="all">CROP TYPE</option>
+            </select>
+        </div>
+        <div class="filter-group">
+            <select class="filter-select" id="cropFilter">
+                <option value="all">CROP NAME</option>
+            </select>
+        </div>
+        <div class="filter-group">
+            <select class="filter-select" id="companyFilter">
+                <option value="all">COMPANY NAME</option>
+                <option value="coromandel">Coromandel</option>
+                <option value="rallis">Rallis India</option>
+                <option value="bayer">Bayer</option>
+                <option value="upl">UPL</option>
+                <option value="syngenta">Syngenta</option>
+            </select>
+        </div>
+        <div class="filter-group">
+            <select class="filter-select" id="geoFilter">
+                <option value="all">Geography</option>
+            </select>
+        </div>
+    </div>
+
+    <div class="main-content">
+        <!-- HOME MODULE -->
+        <div class="module-view active" id="home-module">
+            <div class="kpi-row">
+                <div class="kpi-card alert">
+                    <div class="kpi-value" id="alertCount">--</div>
+                    <div class="kpi-label">ALERT</div>
+                </div>
+                <div class="kpi-card activity">
+                    <div class="kpi-value" id="activityCount">--</div>
+                    <div class="kpi-label">ACTIVITY</div>
+                </div>
+                <div class="kpi-card health">
+                    <div class="kpi-value" id="marketHealth">--</div>
+                    <div class="kpi-label">MARKET HEALTH</div>
+                </div>
+            </div>
+
+            <div class="chart-grid">
+                <div class="chart-container">
+                    <div class="chart-title">Volume & Sentiment Trend</div>
+                    <div class="chart-wrapper">
+                        <canvas id="volumeSentimentChart"></canvas>
+                    </div>
+                </div>
+                <div class="chart-container">
+                    <div class="chart-title">Conversation Distribution</div>
+                    <div class="doughnut-container">
+                        <canvas id="conversationDistChart"></canvas>
+                    </div>
+                    <div class="distribution-bars" id="distributionBars">
+                        <div class="dist-bar positive" style="width: 0%">Positive 0%</div>
+                        <div class="dist-bar neutral" style="width: 0%">Neutral 0%</div>
+                        <div class="dist-bar negative" style="width: 0%">Negative 0%</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="competitive-section">
+                <div class="chart-container">
+                    <div class="chart-title">Market Share Over Time</div>
+                    <div class="chart-wrapper">
+                        <canvas id="marketShareChart"></canvas>
+                    </div>
+                    <div class="chart-title" style="margin-top: 30px;">Top Conversation Drivers</div>
+                    <div class="chart-wrapper small">
+                        <canvas id="conversationDriversChart"></canvas>
+                    </div>
+                </div>
+                <div class="competitive-table">
+                    <div class="chart-title">COMPETITIVE SNAPSHOT</div>
+                    <h3 style="margin: 20px 0 15px 0; font-size: 14px;">Competitive Position vs. Top 3</h3>
+                    <table class="position-table">
+                        <thead>
+                            <tr>
+                                <th>Brand</th>
+                                <th>Share</th>
+                                <th>Score</th>
+                            </tr>
+                        </thead>
+                        <tbody id="competitivePositionTable">
+                            <tr><td colspan="3">Loading...</td></tr>
+                        </tbody>
+                    </table>
+                    <div class="insight-block">
+                        <div class="insight-title">Insight Block: User Notes</div>
+                        <div class="user-notes">User Notes</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- MARKETING MODULE -->
+        <div class="module-view" id="marketing-module">
+            <div class="chart-grid">
+                <div class="chart-container">
+                    <div class="chart-title">Brand Health Trend</div>
+                    <div class="chart-wrapper">
+                        <canvas id="brandHealthTrendChart"></canvas>
+                    </div>
+                </div>
+                <div class="chart-container">
+                    <div class="chart-title">Conversation Volume by Topic</div>
+                    <div class="chart-wrapper">
+                        <canvas id="convVolumeTopicChart"></canvas>
+                    </div>
+                </div>
+            </div>
+
+            <div class="chart-grid">
+                <div class="chart-container">
+                    <div class="chart-title">Brand Keywords</div>
+                    <div class="chart-wrapper">
+                        <canvas id="wordCloudCanvas"></canvas>
+                    </div>
+                </div>
+                <div class="chart-container">
+                    <div class="chart-title">Market Share Trend</div>
+                    <div class="chart-wrapper">
+                        <canvas id="marketShareTrendChart"></canvas>
+                    </div>
+                </div>
+            </div>
+
+            <div class="chart-grid">
+                <div class="chart-container">
+                    <div class="chart-title">Competitive Landscape</div>
+                    <div class="chart-wrapper">
+                        <canvas id="competitiveLandscapeChart"></canvas>
+                    </div>
+                </div>
+                <div class="chart-container">
+                    <div class="chart-title">Sentiment by Competitor</div>
+                    <div class="chart-wrapper">
+                        <canvas id="sentimentCompetitorChart"></canvas>
+                    </div>
+                </div>
+            </div>
+
+            <div class="chart-grid">
+                <div class="chart-container">
+                    <div class="chart-title">
+                        Brand-Crop Association
+                        <select id="brandFilterAssoc" style="float: right; padding: 5px 10px; border: 1px solid #ddd; border-radius: 4px; font-size: 12px;">
+                            <option value="all">All Brands</option>
+                        </select>
+                    </div>
+                    <div class="chart-wrapper">
+                        <canvas id="brandCropAssocChart"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- OPERATIONS MODULE -->
+        <div class="module-view" id="operations-module">
+            <div class="chart-container full-width">
+                <div class="chart-title">Urgent Issue Log</div>
+                <div class="table-container">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>ID</th>
+                                <th>Date</th>
+                                <th>Issue</th>
+                                <th>Urgency</th>
+                                <th>Topic</th>
+                                <th>Sentiment</th>
+                            </tr>
+                        </thead>
+                        <tbody id="urgentIssuesTable">
+                            <tr><td colspan="6">Loading...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div class="chart-grid">
+                <div class="chart-container">
+                    <div class="chart-title">Demand Signal Trend</div>
+                    <div class="chart-wrapper">
+                        <canvas id="demandSignalChart"></canvas>
+                    </div>
+                </div>
+                <div class="chart-container">
+                    <div class="chart-title">Demand Change Alert</div>
+                    <div class="table-container" style="max-height: 300px;">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Crop</th>
+                                    <th>Current Demand</th>
+                                    <th>Trend</th>
+                                    <th>Change %</th>
+                                </tr>
+                            </thead>
+                            <tbody id="demandChangeTable">
+                                <tr><td colspan="4">Loading...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <div class="chart-grid">
+                <div class="chart-container">
+                    <div class="chart-title">Problem Trend</div>
+                    <div class="chart-wrapper">
+                        <canvas id="problemTrendChart"></canvas>
+                    </div>
+                </div>
+                <div class="chart-container">
+                    <div class="chart-title">Problem Sentiment</div>
+                    <div class="chart-wrapper">
+                        <canvas id="problemSentimentChart"></canvas>
+                    </div>
+                </div>
+            </div>
+
+            <div class="chart-grid">
+                <div class="chart-container">
+                    <div class="chart-title">Crop Keywords</div>
+                    <div class="chart-wrapper">
+                        <canvas id="cropWordCloudCanvas"></canvas>
+                    </div>
+                </div>
+                <div class="chart-container">
+                    <div class="chart-title">Solution Effectiveness</div>
+                    <div class="chart-wrapper">
+                        <canvas id="solutionEffectivenessChart"></canvas>
+                    </div>
+                </div>
+            </div>
+
+            <div class="chart-grid">
+                <div class="chart-container">
+                    <div class="chart-title">Solution Sentiment</div>
+                    <div class="chart-wrapper">
+                        <canvas id="solutionSentimentChart"></canvas>
+                    </div>
+                </div>
+                <div class="chart-container">
+                    <div class="chart-title">Sentiment by Crop</div>
+                    <div class="chart-wrapper">
+                        <canvas id="sentimentCropChart"></canvas>
+                    </div>
+                </div>
+            </div>
+
+            <div class="chart-container full-width">
+                <div class="chart-title">Crop-Pest Heatmap</div>
+                <div class="heatmap-container">
+                    <table class="heatmap-table" id="cropPestHeatmapTable">
+                        <thead id="cropPestHeatmapHeader"></thead>
+                        <tbody id="cropPestHeatmapBody"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- ENGAGEMENT MODULE -->
+        <div class="module-view" id="engagement-module">
+            <div class="chart-grid">
+                <div class="chart-container">
+                    <div class="chart-title">Conversations by Region</div>
+                    <div class="chart-wrapper">
+                        <canvas id="convByRegionChart"></canvas>
+                    </div>
+                </div>
+                <div class="chart-container">
+                    <div class="chart-title">Team Urgency</div>
+                    <div class="doughnut-container">
+                        <canvas id="teamUrgencyChart"></canvas>
+                    </div>
+                </div>
+            </div>
+
+            <div class="chart-grid">
+                <div class="chart-container">
+                    <div class="chart-title">Team Intent</div>
+                    <div class="doughnut-container">
+                        <canvas id="teamIntentChart"></canvas>
+                    </div>
+                </div>
+                <div class="chart-container">
+                    <div class="chart-title">Quality by Region</div>
+                    <div class="chart-wrapper">
+                        <canvas id="qualityByRegionChart"></canvas>
+                    </div>
+                </div>
+            </div>
+
+            <div class="chart-container full-width">
+                <div class="chart-title">Agent Scorecard</div>
+                <div class="table-container">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Agent Name</th>
+                                <th>Total Conversations</th>
+                                <th>Avg Sentiment</th>
+                                <th>Urgent Handled</th>
+                            </tr>
+                        </thead>
+                        <tbody id="agentScorecardTable">
+                            <tr><td colspan="4">Loading...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div class="chart-grid">
+                <div class="chart-container">
+                    <div class="chart-title">Agent Leaderboard</div>
+                    <div class="table-container" style="max-height: 300px;">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Rank</th>
+                                    <th>Agent Name</th>
+                                    <th>Conversations</th>
+                                    <th>Performance Score</th>
+                                </tr>
+                            </thead>
+                            <tbody id="agentLeaderboardTable">
+                                <tr><td colspan="4">Loading...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                <div class="chart-container">
+                    <div class="chart-title">Agent Performance Trend</div>
+                    <div class="chart-wrapper">
+                        <canvas id="agentPerfTrendChart"></canvas>
+                    </div>
+                </div>
+            </div>
+
+            <div class="chart-grid">
+                <div class="chart-container">
+                    <div class="chart-title">Field Leaders</div>
+                    <div class="chart-wrapper">
+                        <canvas id="fieldLeadersChart"></canvas>
+                    </div>
+                </div>
+                <div class="chart-container">
+                    <div class="chart-title">Sentiment by Entity</div>
+                    <div class="chart-wrapper">
+                        <canvas id="sentimentByEntityChart"></canvas>
+                    </div>
+                </div>
+            </div>
+
+            <div class="chart-grid">
+                <div class="chart-container">
+                    <div class="chart-title">Topic Distribution</div>
+                    <div class="chart-wrapper">
+                        <canvas id="topicDistributionChart"></canvas>
+                    </div>
+                </div>
+                <div class="chart-container">
+                    <div class="chart-title">Training Needs</div>
+                    <div class="table-container" style="max-height: 300px;">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Agent Name</th>
+                                    <th>Weak Area</th>
+                                    <th>Issues</th>
+                                    <th>Recommendation</th>
+                                </tr>
+                            </thead>
+                            <tbody id="trainingNeedsTable">
+                                <tr><td colspan="4">Loading...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ADMIN MODULE -->
+        <div class="module-view" id="admin-module">
+            <div class="kpi-grid">
+                <div class="kpi-small admin-only">
+                    <div class="kpi-small-value" id="totalRecords">--</div>
+                    <div class="kpi-small-label">Total Records</div>
+                </div>
+                <div class="kpi-small admin-only">
+                    <div class="kpi-small-value" id="completenessKPI">--</div>
+                    <div class="kpi-small-label">Data Completeness</div>
+                </div>
+                <div class="kpi-small">
+                    <div class="kpi-small-value" id="activeUsers">--</div>
+                    <div class="kpi-small-label">Active Users</div>
+                </div>
+                <div class="kpi-small">
+                    <div class="kpi-small-value" id="dateCoverage">--</div>
+                    <div class="kpi-small-label">Date Coverage (Days)</div>
+                </div>
+            </div>
+
+            <div class="chart-container full-width">
+                <div class="chart-title">Dashboard Users</div>
+                <div class="table-container">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Name</th>
+                                <th>Title</th>
+                                <th>Department</th>
+                                <th>Role</th>
+                                <th>Email</th>
+                                <th>Status</th>
+                            </tr>
+                        </thead>
+                        <tbody id="usersTable">
+                            <tr><td colspan="6">Loading...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div class="chart-container full-width">
+                <div class="chart-title">User Activity Log</div>
+                <div class="table-container">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>User Name</th>
+                                <th>Activity Count</th>
+                                <th>Last Active</th>
+                                <th>Location</th>
+                            </tr>
+                        </thead>
+                        <tbody id="userActivityTable">
+                            <tr><td colspan="4">Loading...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div class="chart-grid admin-only">
+                <div class="chart-container">
+                    <div class="chart-title">Database Statistics</div>
+                    <div id="dbStatsContainer">
+                        <div class="loading"><div class="spinner"></div></div>
+                    </div>
+                </div>
+                <div class="chart-container">
+                    <div class="chart-title">Data Completeness Metrics</div>
+                    <div id="completenessContainer">
+                        <div class="loading"><div class="spinner"></div></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- AUDIO MONITOR MODULE -->
+        <div class="module-view" id="audio-module">
+            <div class="kpi-row">
+                <div class="kpi-card" style="background: linear-gradient(135deg, #ffc107, #ff9800);">
+                    <div class="kpi-value" id="audioPendingCount">0</div>
+                    <div class="kpi-label">PENDING</div>
+                </div>
+                <div class="kpi-card" style="background: linear-gradient(135deg, var(--secondary-green), var(--primary-green));">
+                    <div class="kpi-value" id="audioProcessedCount">0</div>
+                    <div class="kpi-label">PROCESSED</div>
+                </div>
+                <div class="kpi-card" style="background: linear-gradient(135deg, #dc3545, #c82333);">
+                    <div class="kpi-value" id="audioFailedCount">0</div>
+                    <div class="kpi-label">FAILED</div>
+                </div>
+                <div class="kpi-card" style="background: linear-gradient(135deg, #6c757d, #495057);">
+                    <div class="kpi-value" id="audioTotalCount">0</div>
+                    <div class="kpi-label">TOTAL</div>
+                </div>
+            </div>
+
+            <!-- Sub-tabs -->
+            <div style="display: flex; gap: 10px; margin: 20px 0; border-bottom: 2px solid var(--border-color);">
+                <button class="audio-tab-btn active" data-audio-tab="processed" style="padding: 12px 24px; background: var(--primary-green); color: white; border: none; border-radius: 4px 4px 0 0; cursor: pointer; font-weight: 600; font-size: 14px;">Processed</button>
+                <button class="audio-tab-btn" data-audio-tab="pending" style="padding: 12px 24px; background: #f0f0f0; color: var(--dark-gray); border: none; border-radius: 4px 4px 0 0; cursor: pointer; font-weight: 600; font-size: 14px;">Pending</button>
+                <button class="audio-tab-btn" data-audio-tab="failed" style="padding: 12px 24px; background: #f0f0f0; color: var(--dark-gray); border: none; border-radius: 4px 4px 0 0; cursor: pointer; font-weight: 600; font-size: 14px;">Failed</button>
+                <button class="audio-tab-btn" data-audio-tab="language" style="padding: 12px 24px; background: #f0f0f0; color: var(--dark-gray); border: none; border-radius: 4px 4px 0 0; cursor: pointer; font-weight: 600; font-size: 14px;">Language Breakdown</button>
+                <button class="audio-tab-btn" data-audio-tab="analytics" style="padding: 12px 24px; background: #f0f0f0; color: var(--dark-gray); border: none; border-radius: 4px 4px 0 0; cursor: pointer; font-weight: 600; font-size: 14px;">Analytics</button>
+            </div>
+
+            <!-- Processed Tab -->
+            <div class="audio-tab-content" id="audio-processed-tab">
+                <div class="chart-title">Processed Recordings</div>
+                <div style="margin: 15px 0; display: flex; justify-content: space-between; align-items: center;">
+                    <button onclick="loadAudioProcessed(0)" style="padding: 10px 20px; background: var(--primary-green); color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: 600;">Refresh</button>
+                    <span id="audioProcessedInfo" style="color: var(--dark-gray); font-size: 14px;"></span>
+                </div>
+                <div class="table-container">
+                    <table class="position-table" style="width: 100%;">
+                        <thead>
+                            <tr>
+                                <th>Filename</th>
+                                <th>Language</th>
+                                <th>Audio Duration</th>
+                                <th>Processing Time</th>
+                                <th>Ratio</th>
+                                <th>Processed At</th>
+                                <th>Quality</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="audioProcessedTable">
+                            <tr><td colspan="8">Loading...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+                <div id="audioProcessedPagination" style="display: flex; justify-content: center; align-items: center; gap: 10px; margin-top: 20px; padding: 15px; background: var(--light-gray); border-radius: 8px;"></div>
+            </div>
+
+            <!-- Pending Tab -->
+            <div class="audio-tab-content" id="audio-pending-tab" style="display: none;">
+                <div class="chart-title">Pending Recordings</div>
+                <div style="margin: 15px 0; display: flex; justify-content: space-between; align-items: center;">
+                    <button onclick="loadAudioPending(0)" style="padding: 10px 20px; background: var(--primary-green); color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: 600;">Refresh</button>
+                    <span id="audioPendingInfo" style="color: var(--dark-gray); font-size: 14px;"></span>
+                </div>
+                <div class="table-container">
+                    <table class="position-table" style="width: 100%;">
+                        <thead>
+                            <tr>
+                                <th>Filename</th>
+                                <th>Upload Time</th>
+                                <th>Size</th>
+                                <th>Status</th>
+                            </tr>
+                        </thead>
+                        <tbody id="audioPendingTable">
+                            <tr><td colspan="4">Loading...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+                <div id="audioPendingPagination" style="display: flex; justify-content: center; align-items: center; gap: 10px; margin-top: 20px; padding: 15px; background: var(--light-gray); border-radius: 8px;"></div>
+            </div>
+
+            <!-- Failed Tab -->
+            <div class="audio-tab-content" id="audio-failed-tab" style="display: none;">
+                <div class="chart-title">Failed Recordings</div>
+                <div style="margin: 15px 0; display: flex; justify-content: space-between; align-items: center;">
+                    <button onclick="loadAudioFailed(0)" style="padding: 10px 20px; background: var(--primary-green); color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: 600;">Refresh</button>
+                    <span id="audioFailedInfo" style="color: var(--dark-gray); font-size: 14px;"></span>
+                </div>
+                <div class="table-container">
+                    <table class="position-table" style="width: 100%;">
+                        <thead>
+                            <tr>
+                                <th>Filename</th>
+                                <th>Failure Time</th>
+                                <th>Stage</th>
+                                <th>Error</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="audioFailedTable">
+                            <tr><td colspan="5">Loading...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+                <div id="audioFailedPagination" style="display: flex; justify-content: center; align-items: center; gap: 10px; margin-top: 20px; padding: 15px; background: var(--light-gray); border-radius: 8px;"></div>
+            </div>
+
+            <!-- Language Breakdown Tab -->
+            <div class="audio-tab-content" id="audio-language-tab" style="display: none;">
+                <div class="chart-title">Language Breakdown</div>
+                <div style="margin: 15px 0; display: flex; justify-content: space-between; align-items: center;">
+                    <button onclick="loadAudioLanguageBreakdown()" style="padding: 10px 20px; background: var(--primary-green); color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: 600;">Refresh</button>
+                </div>
+                <div id="audioLanguageContent">
+                    <p>Loading language breakdown...</p>
+                </div>
+            </div>
+
+            <!-- Analytics Tab -->
+            <div class="audio-tab-content" id="audio-analytics-tab" style="display: none;">
+                <div class="chart-title">Processing Analytics</div>
+                <div id="audioAnalyticsContent">
+                    <p>Loading analytics...</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Translation Modal -->
+    <div id="translationModal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.7); z-index: 10000; overflow: auto;">
+        <div style="background: white; margin: 30px auto; max-width: 1000px; border-radius: 10px; box-shadow: 0 10px 40px rgba(0,0,0,0.3);">
+            <div style="padding: 20px 30px; border-bottom: 3px solid var(--primary-green); display: flex; justify-content: space-between; align-items: center; background-color: var(--light-gray);">
+                <h2 id="modalFilename" style="margin: 0; color: var(--primary-green); font-size: 16px; word-break: break-all;"></h2>
+                <button onclick="closeTranslationModal()" style="background: none; border: none; font-size: 32px; cursor: pointer; color: #999; line-height: 1;">&times;</button>
+            </div>
+            <div style="padding: 30px;">
+                <!-- Audio Player -->
+                <div style="margin: 20px 0;">
+                    <h3 style="color: var(--primary-green); margin-bottom: 15px; font-size: 16px;">Audio Player</h3>
+                    <audio id="modalAudio" controls style="width: 100%; border-radius: 4px;"></audio>
+                </div>
+                
+                <!-- Processing Metadata -->
+                <div style="margin: 20px 0;">
+                    <h3 style="color: var(--primary-green); margin-bottom: 15px; font-size: 16px;">Processing Details</h3>
+                    <div id="modalMetadata" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px;"></div>
+                </div>
+                
+                <!-- Original Transcription -->
+                <div style="margin: 20px 0;">
+                    <h3 style="color: var(--teal); margin-bottom: 15px; font-size: 16px;">Original Transcription</h3>
+                    <div id="modalTranscription" style="background: #f8f9fa; padding: 20px; border-radius: 8px; line-height: 1.8; border-left: 5px solid var(--teal); min-height: 80px; white-space: pre-wrap; font-style: italic;"></div>
+                </div>
+                
+                <!-- English Translation (hidden for customer_admin) -->
+                <div id="translationSection" style="margin: 20px 0;">
+                    <h3 style="color: var(--primary-green); margin-bottom: 15px; font-size: 16px;">English Translation</h3>
+                    <div id="modalTranslation" style="background: #e8f5e9; padding: 20px; border-radius: 8px; line-height: 1.8; border-left: 5px solid var(--primary-green); min-height: 80px; white-space: pre-wrap;"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let charts = {};
+
+        // Helper function to get color for heatmap
+        function getHeatmapColor(value, max) {
+            if (value === 0) return '#f5f5f5';
+            const intensity = value / max;
+            if (intensity < 0.2) return '#e8f5e9';
+            if (intensity < 0.4) return '#a5d6a7';
+            if (intensity < 0.6) return '#66bb6a';
+            if (intensity < 0.8) return '#43a047';
+            return '#2e7d32';
+        }
+
+        // Load filter options
+        function loadFilterOptions() {
+            fetch('/api/filters/crop-types')
+                .then(res => res.json())
+                .then(data => {
+                    const select = document.getElementById('cropTypeFilter');
+                    data.forEach(type => {
+                        const option = document.createElement('option');
+                        option.value = type;
+                        option.textContent = type;
+                        select.appendChild(option);
+                    });
+                });
+
+            fetch('/api/filters/crops')
+                .then(res => res.json())
+                .then(data => {
+                    const select = document.getElementById('cropFilter');
+                    data.forEach(crop => {
+                        const option = document.createElement('option');
+                        option.value = crop.crop_code;
+                        option.textContent = crop.crop_name;
+                        select.appendChild(option);
+                    });
+                });
+        }
+
+        // Navigation (will be initialized in DOMContentLoaded)
+        function setupNavigation() {
+            document.querySelectorAll('.nav-item').forEach(item => {
+                item.addEventListener('click', function() {
+                    const module = this.getAttribute('data-module');
+                    
+                    document.querySelectorAll('.nav-item').forEach(i => i.classList.remove('active'));
+                    this.classList.add('active');
+                    
+                    const moduleNames = {
+                        'home': 'Market Pulse',
+                        'marketing': 'Marketing Analytics',
+                        'operations': 'Operations Dashboard',
+                        'engagement': 'Engagement Metrics',
+                        'admin': 'Admin Panel',
+                        'audio': 'Audio Processing Monitor'
+                    };
+                    document.getElementById('current-module').textContent = moduleNames[module];
+                    
+                    document.querySelectorAll('.module-view').forEach(v => v.classList.remove('active'));
+                    document.getElementById(module + '-module').classList.add('active');
+                    
+                    loadModuleData(module);
+                });
+            });
+
+            // Date filter handling
+            document.getElementById('dateFilter').addEventListener('change', function() {
+                const customInputs = document.getElementById('customDateInputs');
+                if (this.value === 'custom') {
+                    customInputs.classList.add('active');
+                } else {
+                    customInputs.classList.remove('active');
+                    const activeModule = document.querySelector('.nav-item.active').getAttribute('data-module');
+                    loadModuleData(activeModule);
+                }
+            });
+
+            document.getElementById('endDate').addEventListener('change', function() {
+                const activeModule = document.querySelector('.nav-item.active').getAttribute('data-module');
+                loadModuleData(activeModule);
+            });
+        }
+
+        function getDateFilter() {
+            const dateSelect = document.getElementById('dateFilter').value;
+            if (dateSelect === 'custom') {
+                const start = document.getElementById('startDate').value;
+                const end = document.getElementById('endDate').value;
+                if (start && end) {
+                    return `${start},${end}`;
+                }
+                return '30';
+            }
+            return dateSelect;
+        }
+
+        function createChart(ctx, type, data, options = {}) {
+            const chartId = ctx.canvas.id;
+            if (charts[chartId]) {
+                charts[chartId].destroy();
+            }
+            charts[chartId] = new Chart(ctx, {
+                type: type,
+                data: data,
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            position: 'bottom'
+                        }
+                    },
+                    ...options
+                }
+            });
+        }
+
+        function loadModuleData(module) {
+            switch(module) {
+                case 'home':
+                    loadHomeData();
+                    break;
+                case 'marketing':
+                    loadMarketingData();
+                    break;
+                case 'operations':
+                    loadOperationsData();
+                    break;
+                case 'engagement':
+                    loadEngagementData();
+                    break;
+                case 'admin':
+                    loadAdminData();
+                    break;
+                case 'audio':
+                    loadAudioData();
+                    break;
+            }
+        }
+
+        // HOME MODULE
+        function loadHomeData() {
+            const dateFilter = getDateFilter();
+            
+            fetch(`/api/home/kpis?date=${dateFilter}`)
+                .then(res => res.json())
+                .then(data => {
+                    document.getElementById('alertCount').textContent = data.alert_count;
+                    document.getElementById('activityCount').textContent = data.activity_count;
+                    document.getElementById('marketHealth').textContent = data.market_health;
+                });
+
+            fetch(`/api/home/volume-sentiment?date=${dateFilter}`)
+                .then(res => res.json())
+                .then(data => {
+                    const ctx = document.getElementById('volumeSentimentChart').getContext('2d');
+                    createChart(ctx, 'line', {
+                        labels: data.labels,
+                        datasets: [{
+                            label: 'Volume',
+                            data: data.volume,
+                            borderColor: '#3d7f5f',
+                            backgroundColor: 'rgba(61, 127, 95, 0.1)',
+                            yAxisID: 'y',
+                            fill: true
+                        }, {
+                            label: 'Sentiment',
+                            data: data.sentiment,
+                            borderColor: '#e8803b',
+                            backgroundColor: 'rgba(232, 128, 59, 0.1)',
+                            yAxisID: 'y1',
+                            fill: true
+                        }]
+                    }, {
+                        scales: {
+                            y: {
+                                type: 'linear',
+                                position: 'left',
+                                title: { display: true, text: 'Volume' }
+                            },
+                            y1: {
+                                type: 'linear',
+                                position: 'right',
+                                title: { display: true, text: 'Sentiment' },
+                                grid: {
+                                    drawOnChartArea: false
+                                }
+                            }
+                        }
+                    });
+                });
+
+            fetch('/api/home/conversation-distribution')
+                .then(res => res.json())
+                .then(data => {
+                    const ctx = document.getElementById('conversationDistChart').getContext('2d');
+                    
+                    // Calculate total for percentages
+                    const total = data.data.reduce((sum, val) => sum + val, 0);
+                    
+                    createChart(ctx, 'doughnut', {
+                        labels: data.labels,
+                        datasets: [{
+                            data: data.data,
+                            backgroundColor: ['#2d5f3f', '#4a8e8b', '#e8803b', '#f5c563', '#8b4513']
+                        }]
+                    }, {
+                        plugins: {
+                            tooltip: {
+                                callbacks: {
+                                    label: function(context) {
+                                        const value = context.parsed;
+                                        const percentage = ((value / total) * 100).toFixed(1);
+                                        return context.label + ': ' + value + ' (' + percentage + '%)';
+                                    }
+                                }
+                            }
+                        }
+                    });
+                    
+                    // Update distribution bars with correct percentages
+                    const sentimentData = {};
+                    data.labels.forEach((label, idx) => {
+                        const lowerLabel = label.toLowerCase();
+                        if (lowerLabel.includes('positive')) {
+                            sentimentData.positive = data.data[idx];
+                        } else if (lowerLabel.includes('neutral')) {
+                            sentimentData.neutral = data.data[idx];
+                        } else if (lowerLabel.includes('negative')) {
+                            sentimentData.negative = data.data[idx];
+                        }
+                    });
+                    
+                    const sentimentTotal = (sentimentData.positive || 0) + (sentimentData.neutral || 0) + (sentimentData.negative || 0);
+                    
+                    if (sentimentTotal > 0) {
+                        const positivePct = ((sentimentData.positive || 0) / sentimentTotal * 100).toFixed(1);
+                        const neutralPct = ((sentimentData.neutral || 0) / sentimentTotal * 100).toFixed(1);
+                        const negativePct = ((sentimentData.negative || 0) / sentimentTotal * 100).toFixed(1);
+                        
+                        const barsContainer = document.getElementById('distributionBars');
+                        barsContainer.innerHTML = `
+                            <div class="dist-bar positive" style="width: ${positivePct}%">Positive ${positivePct}%</div>
+                            <div class="dist-bar neutral" style="width: ${neutralPct}%">Neutral ${neutralPct}%</div>
+                            <div class="dist-bar negative" style="width: ${negativePct}%">Negative ${negativePct}%</div>
+                        `;
+                    }
+                });
+
+            fetch('/api/home/market-share')
+                .then(res => res.json())
+                .then(data => {
+                    const ctx = document.getElementById('marketShareChart').getContext('2d');
+                    
+                    // Calculate total and convert to percentages
+                    const total = data.data.reduce((sum, val) => sum + val, 0);
+                    const percentages = data.data.map(val => ((val / total) * 100).toFixed(1));
+                    
+                    createChart(ctx, 'bar', {
+                        labels: data.labels,
+                        datasets: [{
+                            label: 'Market Share (%)',
+                            data: percentages,
+                            backgroundColor: ['#2d5f3f', '#4a8e8b', '#e8803b', '#f5c563']
+                        }]
+                    }, {
+                        scales: {
+                            y: {
+                                beginAtZero: true,
+                                max: 100,
+                                title: { display: true, text: 'Market Share (%)' },
+                                ticks: {
+                                    callback: function(value) {
+                                        return value + '%';
+                                    }
+                                }
+                            }
+                        },
+                        plugins: {
+                            tooltip: {
+                                callbacks: {
+                                    label: function(context) {
+                                        return context.dataset.label + ': ' + context.parsed.y + '%';
+                                    }
+                                }
+                            }
+                        }
+                    });
+                });
+
+            fetch('/api/home/competitive-position')
+                .then(res => res.json())
+                .then(data => {
+                    const table = document.getElementById('competitivePositionTable');
+                    const colors = ['#2d5f3f', '#4a8e8b', '#e8803b'];
+                    
+                    // Calculate total and convert to percentages
+                    const total = data.reduce((sum, row) => sum + (parseFloat(row.share) || 0), 0);
+                    
+                    table.innerHTML = data.map((row, idx) => {
+                        const percentage = total > 0 ? ((parseFloat(row.share) / total) * 100).toFixed(1) : row.share;
+                        return `
+                            <tr>
+                                <td><span class="brand-circle" style="background-color: ${colors[idx]}"></span>${row.brand}</td>
+                                <td>${percentage}%</td>
+                                <td>-</td>
+                            </tr>
+                        `;
+                    }).join('');
+                });
+
+            fetch('/api/home/conversation-drivers')
+                .then(res => res.json())
+                .then(data => {
+                    const ctx = document.getElementById('conversationDriversChart').getContext('2d');
+                    createChart(ctx, 'bar', {
+                        labels: data.labels,
+                        datasets: [{
+                            label: 'Drivers',
+                            data: data.data,
+                            backgroundColor: '#4a8e8b'
+                        }]
+                    }, {
+                        indexAxis: 'y'
+                    });
+                });
+        }
+
+        // MARKETING MODULE
+        function loadMarketingData() {
+            const dateFilter = getDateFilter();
+
+            fetch(`/api/marketing/brand-health-trend?date=${dateFilter}`)
+                .then(res => res.json())
+                .then(data => {
+                    const ctx = document.getElementById('brandHealthTrendChart').getContext('2d');
+                    createChart(ctx, 'line', {
+                        labels: data.labels,
+                        datasets: [{
+                            label: 'Volume',
+                            data: data.volume,
+                            borderColor: '#3d7f5f',
+                            yAxisID: 'y'
+                        }, {
+                            label: 'Health',
+                            data: data.health,
+                            borderColor: '#e8803b',
+                            yAxisID: 'y1'
+                        }]
+                    }, {
+                        scales: {
+                            y: { type: 'linear', position: 'left', title: { display: true, text: 'Volume' } },
+                            y1: { type: 'linear', position: 'right', title: { display: true, text: 'Health Score' }, grid: { drawOnChartArea: false } }
+                        }
+                    });
+                });
+
+            fetch(`/api/marketing/conv-volume-by-topic?date=${dateFilter}`)
+                .then(res => res.json())
+                .then(data => {
+                    const ctx = document.getElementById('convVolumeTopicChart').getContext('2d');
+                    createChart(ctx, 'bar', {
+                        labels: data.labels,
+                        datasets: data.datasets.map((ds, idx) => ({
+                            label: ds.label,
+                            data: ds.data,
+                            backgroundColor: ['#2d5f3f', '#4a8e8b', '#e8803b', '#f5c563', '#8b4513'][idx % 5]
+                        }))
+                    }, {
+                        scales: {
+                            x: { stacked: true },
+                            y: { stacked: true }
+                        }
+                    });
+                });
+
+            fetch('/api/marketing/brand-keywords')
+                .then(res => res.json())
+                .then(data => {
+                    const canvas = document.getElementById('wordCloudCanvas');
+                    const container = canvas.parentElement;
+                    canvas.width = container.offsetWidth;
+                    canvas.height = 300;
+                    
+                    // Clear canvas first
+                    const ctx = canvas.getContext('2d');
+                    ctx.clearRect(0, 0, canvas.width, canvas.height);
+                    
+                    if (data && data.length > 0) {
+                        const list = data.map(item => [item.text, item.size]);
+                        
+                        // Check if WordCloud is available
+                        if (typeof WordCloud === 'function') {
+                            try {
+                                WordCloud(canvas, { 
+                                    list: list,
+                                    gridSize: 10,
+                                    weightFactor: function(size) {
+                                        const maxSize = Math.max(...data.map(d => d.size));
+                                        return (size / maxSize) * 40;
+                                    },
+                                    fontFamily: 'Arial, sans-serif',
+                                    color: function() {
+                                        const colors = ['#2d5f3f', '#4a8e8b', '#e8803b', '#f5c563'];
+                                        return colors[Math.floor(Math.random() * colors.length)];
+                                    },
+                                    rotateRatio: 0.3,
+                                    backgroundColor: 'white',
+                                    minSize: 8
+                                });
+                            } catch(e) {
+                                console.error('WordCloud rendering error:', e);
+                                ctx.fillStyle = '#666';
+                                ctx.font = '14px Arial';
+                                ctx.textAlign = 'center';
+                                ctx.fillText('Brand keywords available: ' + data.length + ' keywords', canvas.width / 2, canvas.height / 2);
+                            }
+                        } else {
+                            // WordCloud library not loaded, show fallback
+                            ctx.fillStyle = '#666';
+                            ctx.font = '12px Arial';
+                            ctx.textAlign = 'left';
+                            const topKeywords = data.slice(0, 15);
+                            topKeywords.forEach((item, idx) => {
+                                ctx.fillText(`${item.text} (${item.size})`, 20, 30 + (idx * 18));
+                            });
+                        }
+                    } else {
+                        ctx.fillStyle = '#999';
+                        ctx.font = '14px Arial';
+                        ctx.textAlign = 'center';
+                        ctx.fillText('No brand keyword data available', canvas.width / 2, canvas.height / 2);
+                    }
+                })
+                .catch(err => {
+                    console.error('Error loading brand keywords:', err);
+                    const canvas = document.getElementById('wordCloudCanvas');
+                    const ctx = canvas.getContext('2d');
+                    ctx.fillStyle = '#999';
+                    ctx.font = '14px Arial';
+                    ctx.textAlign = 'center';
+                    ctx.fillText('Error loading brand keywords', canvas.width / 2, canvas.height / 2);
+                });
+
+            fetch(`/api/marketing/market-share-trend?date=${dateFilter}`)
+                .then(res => res.json())
+                .then(data => {
+                    const ctx = document.getElementById('marketShareTrendChart').getContext('2d');
+                    const colors = ['#2d5f3f', '#4a8e8b', '#e8803b', '#f5c563'];
+                    
+                    // Convert to percentages - for each time period, calculate % of total
+                    const processedDatasets = data.datasets.map((ds, idx) => {
+                        const processedData = ds.data.map((value, timeIdx) => {
+                            // Calculate total for this time period across all datasets
+                            const totalForPeriod = data.datasets.reduce((sum, dataset) => 
+                                sum + (dataset.data[timeIdx] || 0), 0);
+                            return totalForPeriod > 0 ? ((value / totalForPeriod) * 100).toFixed(1) : 0;
+                        });
+                        
+                        return {
+                            label: ds.label,
+                            data: processedData,
+                            borderColor: colors[idx % colors.length],
+                            tension: 0.1
+                        };
+                    });
+                    
+                    createChart(ctx, 'line', {
+                        labels: data.labels,
+                        datasets: processedDatasets
+                    }, {
+                        scales: {
+                            y: {
+                                beginAtZero: true,
+                                max: 100,
+                                title: { display: true, text: 'Market Share (%)' },
+                                ticks: {
+                                    callback: function(value) {
+                                        return value + '%';
+                                    }
+                                }
+                            }
+                        },
+                        plugins: {
+                            tooltip: {
+                                callbacks: {
+                                    label: function(context) {
+                                        return context.dataset.label + ': ' + context.parsed.y + '%';
+                                    }
+                                }
+                            }
+                        }
+                    });
+                });
+
+            fetch('/api/marketing/competitive-landscape')
+                .then(res => res.json())
+                .then(data => {
+                    const ctx = document.getElementById('competitiveLandscapeChart').getContext('2d');
+                    const colors = ['#2d5f3f', '#4a8e8b', '#e8803b', '#f5c563'];
+                    
+                    createChart(ctx, 'bubble', {
+                        datasets: data.map((item, idx) => ({
+                            label: item.company_name,
+                            data: [{
+                                x: item.x,
+                                y: item.y || 50,
+                                r: Math.min(Math.sqrt(item.r) * 3, 30)
+                            }],
+                            backgroundColor: colors[idx % colors.length]
+                        }))
+                    }, {
+                        scales: {
+                            x: { 
+                                title: { display: true, text: 'Mentions' },
+                                beginAtZero: true
+                            },
+                            y: { 
+                                title: { display: true, text: 'Sentiment Score' },
+                                min: 0,
+                                max: 100
+                            }
+                        },
+                        plugins: {
+                            tooltip: {
+                                callbacks: {
+                                    label: function(context) {
+                                        return context.dataset.label + ': Mentions=' + context.parsed.x + ', Sentiment=' + context.parsed.y.toFixed(1);
+                                    }
+                                }
+                            }
+                        }
+                    });
+                });
+
+            fetch(`/api/marketing/sentiment-by-competitor?date=${dateFilter}`)
+                .then(res => res.json())
+                .then(data => {
+                    const ctx = document.getElementById('sentimentCompetitorChart').getContext('2d');
+                    const colors = ['#2d5f3f', '#4a8e8b', '#e8803b', '#f5c563', '#8b4513'];
+                    
+                    createChart(ctx, 'line', {
+                        labels: data.labels,
+                        datasets: data.datasets.map((ds, idx) => ({
+                            label: ds.label,
+                            data: ds.data,
+                            borderColor: colors[idx % colors.length],
+                            backgroundColor: colors[idx % colors.length] + '20',
+                            tension: 0.3,
+                            fill: false,
+                            spanGaps: true,
+                            borderWidth: 2
+                        }))
+                    }, {
+                        scales: {
+                            y: {
+                                min: 0,
+                                max: 100,
+                                title: { display: true, text: 'Sentiment Score (%)' }
+                            },
+                            x: {
+                                title: { display: true, text: 'Time Period' }
+                            }
+                        },
+                        plugins: {
+                            legend: {
+                                position: 'bottom',
+                                labels: {
+                                    boxWidth: 15,
+                                    padding: 10
+                                }
+                            },
+                            tooltip: {
+                                mode: 'index',
+                                intersect: false
+                            }
+                        }
+                    });
+                })
+                .catch(err => {
+                    console.error('Error loading sentiment by competitor:', err);
+                });
+
+            fetch('/api/marketing/brand-crop-association')
+                .then(res => res.json())
+                .then(data => {
+                    const brandSelect = document.getElementById('brandFilterAssoc');
+                    const brands = [...new Set(data.map(d => d.parent))];
+                    brands.forEach(brand => {
+                        const option = document.createElement('option');
+                        option.value = brand;
+                        option.textContent = brand;
+                        brandSelect.appendChild(option);
+                    });
+                    
+                    const renderBrandCropChart = (filterBrand) => {
+                        const ctx = document.getElementById('brandCropAssocChart').getContext('2d');
+                        
+                        let filteredData = data;
+                        if (filterBrand !== 'all') {
+                            filteredData = data.filter(d => d.parent === filterBrand);
+                        }
+                        
+                        const grouped = {};
+                        filteredData.forEach(item => {
+                            if (!grouped[item.parent]) {
+                                grouped[item.parent] = [];
+                            }
+                            grouped[item.parent].push(item);
+                        });
+                        
+                        const brandsToShow = Object.keys(grouped).slice(0, 5);
+                        const allCrops = [...new Set(filteredData.map(d => d.label))];
+                        
+                        const datasets = allCrops.slice(0, 10).map((crop, idx) => {
+                            const colors = ['#2d5f3f', '#4a8e8b', '#e8803b', '#f5c563', '#8b4513', '#6b8e23', '#cd853f', '#bc8f8f', '#708090', '#2f4f4f'];
+                            return {
+                                label: crop,
+                                data: brandsToShow.map(brand => {
+                                    const items = grouped[brand] || [];
+                                    const match = items.find(i => i.label === crop);
+                                    return match ? match.value : 0;
+                                }),
+                                backgroundColor: colors[idx % colors.length]
+                            };
+                        });
+                        
+                        createChart(ctx, 'bar', {
+                            labels: brandsToShow,
+                            datasets: datasets
+                        }, {
+                            indexAxis: 'y',
+                            scales: {
+                                x: { 
+                                    stacked: true,
+                                    title: { display: true, text: 'Co-mentions' }
+                                },
+                                y: { 
+                                    stacked: true,
+                                    title: { display: true, text: 'Brands' }
+                                }
+                            },
+                            plugins: {
+                                title: {
+                                    display: true,
+                                    text: filterBrand === 'all' ? 'All Brands - Crop Association' : filterBrand + ' - Crop Association'
+                                },
+                                legend: {
+                                    position: 'right',
+                                    labels: {
+                                        boxWidth: 12,
+                                        font: { size: 10 }
+                                    }
+                                }
+                            }
+                        });
+                    };
+                    
+                    renderBrandCropChart('all');
+                    
+                    brandSelect.addEventListener('change', function() {
+                        renderBrandCropChart(this.value);
+                    });
+                });
+        }
+
+        // OPERATIONS MODULE
+        function loadOperationsData() {
+            const dateFilter = getDateFilter();
+
+            fetch('/api/operations/urgent-issues')
+                .then(res => res.json())
+                .then(data => {
+                    const table = document.getElementById('urgentIssuesTable');
+                    if (data.length === 0) {
+                        table.innerHTML = '<tr><td colspan="6">No urgent issues found</td></tr>';
+                    } else {
+                        table.innerHTML = data.map(row => `
+                            <tr>
+                                <td>${row.conversation_id}</td>
+                                <td>${new Date(row.date_recorded).toLocaleDateString()}</td>
+                                <td>${row.user_text ? row.user_text.substring(0, 80) + '...' : 'N/A'}</td>
+                                <td><span class="status-badge" style="background-color: #f8d7da; color: #721c24;">${row.urgency}</span></td>
+                                <td>${row.topic}</td>
+                                <td>${row.sentiment}</td>
+                            </tr>
+                        `).join('');
+                    }
+                });
+
+            fetch(`/api/operations/demand-signal-trend?date=${dateFilter}`)
+                .then(res => res.json())
+                .then(data => {
+                    const ctx = document.getElementById('demandSignalChart').getContext('2d');
+                    createChart(ctx, 'line', {
+                        labels: data.labels,
+                        datasets: [{
+                            label: 'Demand Signals',
+                            data: data.data,
+                            borderColor: '#2d5f3f',
+                            backgroundColor: 'rgba(45, 95, 63, 0.1)',
+                            fill: true,
+                            tension: 0.4
+                        }]
+                    });
+                });
+
+            fetch('/api/operations/demand-change-alert')
+                .then(res => res.json())
+                .then(data => {
+                    const table = document.getElementById('demandChangeTable');
+                    table.innerHTML = data.map(row => `
+                        <tr>
+                            <td>${row.crop_name}</td>
+                            <td>${row.current_demand}</td>
+                            <td>${row.trend}</td>
+                            <td>${row.change_pct}%</td>
+                        </tr>
+                    `).join('');
+                });
+
+            fetch(`/api/operations/problem-trend?date=${dateFilter}`)
+                .then(res => res.json())
+                .then(data => {
+                    const ctx = document.getElementById('problemTrendChart').getContext('2d');
+                    const colors = ['#e8803b', '#4a8e8b', '#8b4513', '#2d5f3f'];
+                    createChart(ctx, 'line', {
+                        labels: data.labels,
+                        datasets: data.datasets.map((ds, idx) => ({
+                            label: ds.label,
+                            data: ds.data,
+                            borderColor: colors[idx % colors.length],
+                            tension: 0.1
+                        }))
+                    });
+                });
+
+            fetch('/api/operations/problem-sentiment')
+                .then(res => res.json())
+                .then(data => {
+                    const ctx = document.getElementById('problemSentimentChart').getContext('2d');
+                    
+                    // Calculate percentages for each problem type
+                    const processedDatasets = data.datasets.map((ds, idx) => {
+                        const processedData = ds.data.map((value, problemIdx) => {
+                            // Calculate total for this problem across all sentiments
+                            const totalForProblem = data.datasets.reduce((sum, dataset) => 
+                                sum + (dataset.data[problemIdx] || 0), 0);
+                            return totalForProblem > 0 ? ((value / totalForProblem) * 100).toFixed(1) : 0;
+                        });
+                        
+                        return {
+                            label: ds.label,
+                            data: processedData,
+                            backgroundColor: ['#2d5f3f', '#4a8e8b', '#e8803b'][idx]
+                        };
+                    });
+                    
+                    createChart(ctx, 'bar', {
+                        labels: data.labels,
+                        datasets: processedDatasets
+                    }, {
+                        scales: {
+                            x: { stacked: true },
+                            y: { 
+                                stacked: true,
+                                max: 100,
+                                title: { display: true, text: 'Sentiment Distribution (%)' },
+                                ticks: {
+                                    callback: function(value) {
+                                        return value + '%';
+                                    }
+                                }
+                            }
+                        },
+                        plugins: {
+                            tooltip: {
+                                callbacks: {
+                                    label: function(context) {
+                                        return context.dataset.label + ': ' + context.parsed.y + '%';
+                                    }
+                                }
+                            }
+                        }
+                    });
+                });
+
+            fetch('/api/operations/crop-keywords')
+                .then(res => res.json())
+                .then(data => {
+                    const canvas = document.getElementById('cropWordCloudCanvas');
+                    const container = canvas.parentElement;
+                    canvas.width = container.offsetWidth;
+                    canvas.height = 300;
+                    
+                    // Clear canvas first
+                    const ctx = canvas.getContext('2d');
+                    ctx.clearRect(0, 0, canvas.width, canvas.height);
+                    
+                    if (data && data.length > 0) {
+                        const list = data.map(item => [item.text, item.size]);
+                        
+                        // Check if WordCloud is available
+                        if (typeof WordCloud === 'function') {
+                            try {
+                                WordCloud(canvas, { 
+                                    list: list,
+                                    gridSize: 10,
+                                    weightFactor: function(size) {
+                                        const maxSize = Math.max(...data.map(d => d.size));
+                                        return (size / maxSize) * 40;
+                                    },
+                                    fontFamily: 'Arial, sans-serif',
+                                    color: function() {
+                                        const colors = ['#2d5f3f', '#4a8e8b', '#e8803b', '#f5c563'];
+                                        return colors[Math.floor(Math.random() * colors.length)];
+                                    },
+                                    rotateRatio: 0.3,
+                                    backgroundColor: 'white',
+                                    minSize: 8
+                                });
+                            } catch(e) {
+                                console.error('WordCloud rendering error:', e);
+                                ctx.fillStyle = '#666';
+                                ctx.font = '14px Arial';
+                                ctx.textAlign = 'center';
+                                ctx.fillText('Crop keywords available: ' + data.length + ' keywords', canvas.width / 2, canvas.height / 2);
+                            }
+                        } else {
+                            // WordCloud library not loaded, show fallback
+                            ctx.fillStyle = '#666';
+                            ctx.font = '12px Arial';
+                            ctx.textAlign = 'left';
+                            const topKeywords = data.slice(0, 15);
+                            topKeywords.forEach((item, idx) => {
+                                ctx.fillText(`${item.text} (${item.size})`, 20, 30 + (idx * 18));
+                            });
+                        }
+                    } else {
+                        ctx.fillStyle = '#999';
+                        ctx.font = '14px Arial';
+                        ctx.textAlign = 'center';
+                        ctx.fillText('No crop keyword data available', canvas.width / 2, canvas.height / 2);
+                    }
+                })
+                .catch(err => {
+                    console.error('Error loading crop keywords:', err);
+                    const canvas = document.getElementById('cropWordCloudCanvas');
+                    const ctx = canvas.getContext('2d');
+                    ctx.fillStyle = '#999';
+                    ctx.font = '14px Arial';
+                    ctx.textAlign = 'center';
+                    ctx.fillText('Error loading crop keywords', canvas.width / 2, canvas.height / 2);
+                });
+
+            fetch('/api/operations/solution-effectiveness')
+                .then(res => res.json())
+                .then(data => {
+                    const ctx = document.getElementById('solutionEffectivenessChart').getContext('2d');
+                    createChart(ctx, 'bar', {
+                        labels: data.labels,
+                        datasets: [{
+                            label: 'Effectiveness',
+                            data: data.data,
+                            backgroundColor: '#4a8e8b'
+                        }]
+                    }, {
+                        indexAxis: 'y'
+                    });
+                });
+
+            fetch(`/api/operations/solution-sentiment?date=${dateFilter}`)
+                .then(res => res.json())
+                .then(data => {
+                    const ctx = document.getElementById('solutionSentimentChart').getContext('2d');
+                    createChart(ctx, 'line', {
+                        labels: data.labels,
+                        datasets: [{
+                            label: 'Solution Sentiment',
+                            data: data.data,
+                            borderColor: '#2d5f3f',
+                            backgroundColor: 'rgba(45, 95, 63, 0.1)',
+                            fill: true,
+                            tension: 0.4
+                        }]
+                    });
+                });
+
+            fetch('/api/operations/sentiment-by-crop')
+                .then(res => res.json())
+                .then(data => {
+                    const ctx = document.getElementById('sentimentCropChart').getContext('2d');
+                    
+                    // Calculate percentages for each crop
+                    const processedDatasets = data.datasets.map((ds, idx) => {
+                        const processedData = ds.data.map((value, cropIdx) => {
+                            // Calculate total for this crop across all sentiments
+                            const totalForCrop = data.datasets.reduce((sum, dataset) => 
+                                sum + (dataset.data[cropIdx] || 0), 0);
+                            return totalForCrop > 0 ? ((value / totalForCrop) * 100).toFixed(1) : 0;
+                        });
+                        
+                        return {
+                            label: ds.label,
+                            data: processedData,
+                            backgroundColor: ['#2d5f3f', '#4a8e8b', '#e8803b'][idx]
+                        };
+                    });
+                    
+                    createChart(ctx, 'bar', {
+                        labels: data.labels,
+                        datasets: processedDatasets
+                    }, {
+                        scales: {
+                            x: { stacked: true },
+                            y: { 
+                                stacked: true,
+                                max: 100,
+                                title: { display: true, text: 'Sentiment Distribution (%)' }
+                            }
+                        },
+                        indexAxis: 'y',
+                        plugins: {
+                            legend: {
+                                position: 'bottom'
+                            },
+                            tooltip: {
+                                callbacks: {
+                                    label: function(context) {
+                                        return context.dataset.label + ': ' + context.parsed.x + '%';
+                                    }
+                                }
+                            }
+                        }
+                    });
+                });
+
+            fetch('/api/operations/crop-pest-heatmap')
+                .then(res => res.json())
+                .then(data => {
+                    const headerEl = document.getElementById('cropPestHeatmapHeader');
+                    const bodyEl = document.getElementById('cropPestHeatmapBody');
+                    
+                    const cropTotals = {};
+                    const pestTotals = {};
+                    
+                    data.forEach(d => {
+                        cropTotals[d.crop_name] = (cropTotals[d.crop_name] || 0) + d.co_mentions;
+                        pestTotals[d.pest_name] = (pestTotals[d.pest_name] || 0) + d.co_mentions;
+                    });
+                    
+                    const topCrops = Object.entries(cropTotals)
+                        .sort((a, b) => b[1] - a[1])
+                        .slice(0, 15)
+                        .map(e => e[0]);
+                    
+                    const topPests = Object.entries(pestTotals)
+                        .sort((a, b) => b[1] - a[1])
+                        .slice(0, 20)
+                        .map(e => e[0]);
+                    
+                    const maxValue = Math.max(...data.map(d => d.co_mentions));
+                    
+                    let headerHTML = '<tr><th class="row-header">Crop / Pest</th>';
+                    topPests.forEach(pest => {
+                        const pestShort = pest.length > 12 ? pest.substring(0, 12) + '...' : pest;
+                        headerHTML += `<th title="${pest}">${pestShort}</th>`;
+                    });
+                    headerHTML += '</tr>';
+                    headerEl.innerHTML = headerHTML;
+                    
+                    let bodyHTML = '';
+                    topCrops.forEach(crop => {
+                        bodyHTML += '<tr>';
+                        bodyHTML += `<td class="row-header" title="${crop}">${crop}</td>`;
+                        
+                        topPests.forEach(pest => {
+                            const match = data.find(d => d.crop_name === crop && d.pest_name === pest);
+                            const value = match ? match.co_mentions : 0;
+                            const color = getHeatmapColor(value, maxValue);
+                            const textColor = value > maxValue * 0.5 ? '#ffffff' : '#333333';
+                            
+                            bodyHTML += `<td style="background-color: ${color}; color: ${textColor};" title="${crop} - ${pest}: ${value} co-mentions">${value > 0 ? value : ''}</td>`;
+                        });
+                        
+                        bodyHTML += '</tr>';
+                    });
+                    bodyEl.innerHTML = bodyHTML;
+                })
+                .catch(err => {
+                    console.error('Error loading crop-pest heatmap:', err);
+                    document.getElementById('cropPestHeatmapBody').innerHTML = '<tr><td colspan="100%">Error loading heatmap data</td></tr>';
+                });
+        }
+
+        // ENGAGEMENT MODULE
+        function loadEngagementData() {
+            const dateFilter = getDateFilter();
+
+            fetch('/api/engagement/conv-by-region')
+                .then(res => res.json())
+                .then(data => {
+                    const ctx = document.getElementById('convByRegionChart').getContext('2d');
+                    createChart(ctx, 'bar', {
+                        labels: data.labels,
+                        datasets: [{
+                            label: 'Conversations',
+                            data: data.data,
+                            backgroundColor: '#2d5f3f'
+                        }]
+                    });
+                });
+
+            fetch('/api/engagement/team-urgency')
+                .then(res => res.json())
+                .then(data => {
+                    const ctx = document.getElementById('teamUrgencyChart').getContext('2d');
+                    createChart(ctx, 'doughnut', {
+                        labels: data.labels,
+                        datasets: [{
+                            data: data.data,
+                            backgroundColor: ['#2d5f3f', '#4a8e8b', '#e8803b', '#f5c563']
+                        }]
+                    });
+                });
+
+            fetch('/api/engagement/team-intent')
+                .then(res => res.json())
+                .then(data => {
+                    const ctx = document.getElementById('teamIntentChart').getContext('2d');
+                    createChart(ctx, 'doughnut', {
+                        labels: data.labels,
+                        datasets: [{
+                            data: data.data,
+                            backgroundColor: ['#2d5f3f', '#4a8e8b', '#e8803b', '#f5c563', '#8b4513']
+                        }]
+                    });
+                });
+
+            fetch('/api/engagement/quality-by-region')
+                .then(res => res.json())
+                .then(data => {
+                    const ctx = document.getElementById('qualityByRegionChart').getContext('2d');
+                    
+                    // Calculate percentages for each region
+                    const processedDatasets = data.datasets.map((ds, idx) => {
+                        const processedData = ds.data.map((value, regionIdx) => {
+                            // Calculate total for this region across all quality levels
+                            const totalForRegion = data.datasets.reduce((sum, dataset) => 
+                                sum + (dataset.data[regionIdx] || 0), 0);
+                            return totalForRegion > 0 ? ((value / totalForRegion) * 100).toFixed(1) : 0;
+                        });
+                        
+                        return {
+                            label: ds.label,
+                            data: processedData,
+                            backgroundColor: ['#2d5f3f', '#4a8e8b', '#e8803b'][idx]
+                        };
+                    });
+                    
+                    createChart(ctx, 'bar', {
+                        labels: data.labels,
+                        datasets: processedDatasets
+                    }, {
+                        scales: {
+                            x: { stacked: true },
+                            y: { 
+                                stacked: true,
+                                max: 100,
+                                title: { display: true, text: 'Quality Distribution (%)' },
+                                ticks: {
+                                    callback: function(value) {
+                                        return value + '%';
+                                    }
+                                }
+                            }
+                        },
+                        plugins: {
+                            tooltip: {
+                                callbacks: {
+                                    label: function(context) {
+                                        return context.dataset.label + ': ' + context.parsed.y + '%';
+                                    }
+                                }
+                            }
+                        }
+                    });
+                });
+
+            fetch('/api/engagement/agent-scorecard')
+                .then(res => res.json())
+                .then(data => {
+                    const table = document.getElementById('agentScorecardTable');
+                    table.innerHTML = data.map(row => `
+                        <tr>
+                            <td>${row.agent_name}</td>
+                            <td>${row.total_convs}</td>
+                            <td>${row.avg_sentiment ? row.avg_sentiment.toFixed(1) : 'N/A'}</td>
+                            <td>${row.urgent_handled}</td>
+                        </tr>
+                    `).join('');
+                });
+
+            fetch('/api/engagement/agent-leaderboard')
+                .then(res => res.json())
+                .then(data => {
+                    const table = document.getElementById('agentLeaderboardTable');
+                    table.innerHTML = data.map((row, idx) => `
+                        <tr>
+                            <td>${idx + 1}</td>
+                            <td>${row.agent_name}</td>
+                            <td>${row.conversations}</td>
+                            <td>${row.performance_score ? row.performance_score.toFixed(2) : 'N/A'}</td>
+                        </tr>
+                    `).join('');
+                });
+
+            fetch(`/api/engagement/agent-perf-trend?date=${dateFilter}`)
+                .then(res => res.json())
+                .then(data => {
+                    const ctx = document.getElementById('agentPerfTrendChart').getContext('2d');
+                    const colors = ['#2d5f3f', '#4a8e8b', '#e8803b', '#f5c563', '#8b4513'];
+                    createChart(ctx, 'line', {
+                        labels: data.labels,
+                        datasets: data.datasets.map((ds, idx) => ({
+                            label: ds.label,
+                            data: ds.data,
+                            borderColor: colors[idx % colors.length],
+                            tension: 0.1
+                        }))
+                    });
+                });
+
+            fetch('/api/engagement/field-leaders')
+                .then(res => res.json())
+                .then(data => {
+                    const ctx = document.getElementById('fieldLeadersChart').getContext('2d');
+                    const colors = ['#2d5f3f', '#4a8e8b', '#e8803b', '#f5c563', '#8b4513'];
+                    
+                    createChart(ctx, 'bubble', {
+                        datasets: data.slice(0, 20).map((item, idx) => ({
+                            label: item.name,
+                            data: [{
+                                x: item.x,
+                                y: item.y || 50,
+                                r: Math.min(Math.sqrt(item.r) * 2, 20)
+                            }],
+                            backgroundColor: colors[idx % colors.length] + '80',
+                            borderColor: colors[idx % colors.length],
+                            borderWidth: 2
+                        }))
+                    }, {
+                        scales: {
+                            x: { 
+                                title: { display: true, text: 'Total Conversations' },
+                                beginAtZero: true
+                            },
+                            y: { 
+                                title: { display: true, text: 'Performance Score' },
+                                min: 0,
+                                max: 100
+                            }
+                        },
+                        plugins: {
+                            legend: {
+                                display: true,
+                                position: 'right',
+                                labels: {
+                                    boxWidth: 8,
+                                    font: { size: 9 }
+                                }
+                            },
+                            tooltip: {
+                                callbacks: {
+                                    label: function(context) {
+                                        return context.dataset.label + ': ' + context.parsed.x + ' convs, Score: ' + context.parsed.y.toFixed(1);
+                                    }
+                                }
+                            }
+                        }
+                    });
+                });
+
+            fetch('/api/engagement/sentiment-by-entity')
+                .then(res => res.json())
+                .then(data => {
+                    const ctx = document.getElementById('sentimentByEntityChart').getContext('2d');
+                    
+                    // Calculate percentages for each entity type
+                    const processedDatasets = data.datasets.map((ds, idx) => {
+                        const processedData = ds.data.map((value, entityIdx) => {
+                            // Calculate total for this entity across all sentiments
+                            const totalForEntity = data.datasets.reduce((sum, dataset) => 
+                                sum + (dataset.data[entityIdx] || 0), 0);
+                            return totalForEntity > 0 ? ((value / totalForEntity) * 100).toFixed(1) : 0;
+                        });
+                        
+                        return {
+                            label: ds.label,
+                            data: processedData,
+                            backgroundColor: ['#2d5f3f', '#4a8e8b', '#e8803b'][idx]
+                        };
+                    });
+                    
+                    createChart(ctx, 'bar', {
+                        labels: data.labels,
+                        datasets: processedDatasets
+                    }, {
+                        scales: {
+                            x: { stacked: true },
+                            y: { 
+                                stacked: true,
+                                max: 100,
+                                title: { display: true, text: 'Sentiment Distribution (%)' },
+                                ticks: {
+                                    callback: function(value) {
+                                        return value + '%';
+                                    }
+                                }
+                            }
+                        },
+                        plugins: {
+                            tooltip: {
+                                callbacks: {
+                                    label: function(context) {
+                                        return context.dataset.label + ': ' + context.parsed.y + '%';
+                                    }
+                                }
+                            }
+                        }
+                    });
+                });
+
+            fetch('/api/engagement/topic-distribution')
+                .then(res => res.json())
+                .then(data => {
+                    const ctx = document.getElementById('topicDistributionChart').getContext('2d');
+                    createChart(ctx, 'bar', {
+                        labels: data.slice(0, 10).map(d => d.label),
+                        datasets: [{
+                            label: 'Topic Count',
+                            data: data.slice(0, 10).map(d => d.value),
+                            backgroundColor: '#4a8e8b'
+                        }]
+                    }, {
+                        indexAxis: 'y'
+                    });
+                });
+
+            fetch('/api/engagement/training-needs')
+                .then(res => res.json())
+                .then(data => {
+                    const table = document.getElementById('trainingNeedsTable');
+                    if (data.length === 0) {
+                        table.innerHTML = '<tr><td colspan="4">No training needs identified</td></tr>';
+                    } else {
+                        table.innerHTML = data.map(row => `
+                            <tr>
+                                <td>${row.agent_name}</td>
+                                <td>${row.weak_area}</td>
+                                <td>${row.negative_count}</td>
+                                <td>${row.recommendation}</td>
+                            </tr>
+                        `).join('');
+                    }
+                });
+        }
+
+        // ADMIN MODULE
+        function loadAdminData() {
+            fetch('/api/admin/users')
+                .then(res => res.json())
+                .then(data => {
+                    const table = document.getElementById('usersTable');
+                    table.innerHTML = data.map(user => `
+                        <tr>
+                            <td>${user.name}</td>
+                            <td>${user.title}</td>
+                            <td>${user.department}</td>
+                            <td>${user.role_type}</td>
+                            <td>${user.email}</td>
+                            <td><span class="status-badge ${user.status === 'Active' ? 'status-active' : 'status-inactive'}">${user.status}</span></td>
+                        </tr>
+                    `).join('');
+                    
+                    document.getElementById('activeUsers').textContent = data.filter(u => u.status === 'Active').length;
+                });
+
+            fetch('/api/admin/user-activity-log')
+                .then(res => res.json())
+                .then(data => {
+                    const table = document.getElementById('userActivityTable');
+                    table.innerHTML = data.map(row => `
+                        <tr>
+                            <td>${row.user_name}</td>
+                            <td>${row.activity_count}</td>
+                            <td>${row.last_active ? new Date(row.last_active).toLocaleDateString() : 'N/A'}</td>
+                            <td>${row.location || 'N/A'}</td>
+                        </tr>
+                    `).join('');
+                });
+
+            fetch('/api/admin/completeness-kpi')
+                .then(res => res.json())
+                .then(data => {
+                    document.getElementById('completenessKPI').textContent = data.overall_completeness + '%';
+                    document.getElementById('totalRecords').textContent = data.total_conversations.toLocaleString();
+                    
+                    const container = document.getElementById('completenessContainer');
+                    container.innerHTML = `
+                        <div class="kpi-grid">
+                            <div class="kpi-small">
+                                <div class="kpi-small-value">${data.semantics_completeness}%</div>
+                                <div class="kpi-small-label">Semantics</div>
+                            </div>
+                            <div class="kpi-small">
+                                <div class="kpi-small-value">${data.entities_completeness}%</div>
+                                <div class="kpi-small-label">Entities</div>
+                            </div>
+                            <div class="kpi-small">
+                                <div class="kpi-small-value">${data.metrics_completeness}%</div>
+                                <div class="kpi-small-label">Metrics</div>
+                            </div>
+                            <div class="kpi-small">
+                                <div class="kpi-small-value">${data.overall_completeness}%</div>
+                                <div class="kpi-small-label">Overall</div>
+                            </div>
+                        </div>
+                    `;
+                });
+
+            fetch('/api/admin/db-stats')
+                .then(res => res.json())
+                .then(data => {
+                    const container = document.getElementById('dbStatsContainer');
+                    container.innerHTML = `
+                        <table style="width: 100%;">
+                            <thead>
+                                <tr>
+                                    <th>Table</th>
+                                    <th>Record Count</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td>fact_conversations</td>
+                                    <td>${(data.fact_conversations || 0).toLocaleString()}</td>
+                                </tr>
+                                <tr>
+                                    <td>fact_conversation_entities</td>
+                                    <td>${(data.fact_conversation_entities || 0).toLocaleString()}</td>
+                                </tr>
+                                <tr>
+                                    <td>fact_conversation_semantics</td>
+                                    <td>${(data.fact_conversation_semantics || 0).toLocaleString()}</td>
+                                </tr>
+                                <tr>
+                                    <td>dim_brands</td>
+                                    <td>${(data.dim_brands || 0).toLocaleString()}</td>
+                                </tr>
+                                <tr>
+                                    <td>dim_crops</td>
+                                    <td>${(data.dim_crops || 0).toLocaleString()}</td>
+                                </tr>
+                                <tr>
+                                    <td>dim_pests</td>
+                                    <td>${(data.dim_pests || 0).toLocaleString()}</td>
+                                </tr>
+                                <tr>
+                                    <td>dim_user</td>
+                                    <td>${(data.dim_user || 0).toLocaleString()}</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                        <div style="margin-top: 20px; padding: 15px; background-color: var(--light-gray); border-radius: 4px;">
+                            <strong>Date Coverage:</strong><br>
+                            From: ${data.date_range?.min || 'N/A'}<br>
+                            To: ${data.date_range?.max || 'N/A'}
+                        </div>
+                    `;
+                    
+                    if (data.date_range?.min && data.date_range?.max) {
+                        const start = new Date(data.date_range.min);
+                        const end = new Date(data.date_range.max);
+                        const days = Math.floor((end - start) / (1000 * 60 * 60 * 24));
+                        document.getElementById('dateCoverage').textContent = days;
+                    }
+                });
+        }
+
+        // AUDIO MONITORING MODULE
+        function loadAudioData() {
+            // Load overview first (fast), then load tabs in parallel
+            loadAudioOverview();
+            initAudioTabs();
+            
+            // Load data for active tab first, then others in background
+            const activeTab = document.querySelector('.audio-tab-btn.active');
+            if (activeTab) {
+                const activeTabName = activeTab.getAttribute('data-audio-tab');
+                switch(activeTabName) {
+                    case 'processed': loadAudioProcessed(0); break;
+                    case 'pending': loadAudioPending(0); break;
+                    case 'failed': loadAudioFailed(0); break;
+                    case 'language': loadAudioLanguageBreakdown(); break;
+                    case 'analytics': loadAudioAnalytics(); break;
+                    default: loadAudioProcessed(0);
+                }
+            } else {
+                // Default to processed tab
+                loadAudioProcessed(0);
+            }
+            
+            // Load other tabs in background (non-blocking)
+            setTimeout(() => {
+                loadAudioPending(0);
+                loadAudioFailed(0);
+            }, 500);
+        }
+
+        function loadAudioOverview() {
+            // Load overview statistics (pending, processed, failed counts)
+            fetch('/api/audio/overview')
+                .then(res => res.json())
+                .then(data => {
+                    if (data.pending !== undefined) {
+                        document.getElementById('audioPendingCount').textContent = data.pending || 0;
+                    }
+                    if (data.processed !== undefined) {
+                        document.getElementById('audioProcessedCount').textContent = data.processed || 0;
+                    }
+                    if (data.failed !== undefined) {
+                        document.getElementById('audioFailedCount').textContent = data.failed || 0;
+                    }
+                    updateAudioTotalCount();
+                })
+                .catch(err => {
+                    console.error('Error loading audio overview:', err);
+                });
+        }
+
+        // Audio pagination state
+        const audioPageSize = 50;
+        let audioCurrentPage = {
+            processed: 0,
+            pending: 0,
+            failed: 0
+        };
+
+        function initAudioTabs() {
+            document.querySelectorAll('.audio-tab-btn').forEach(btn => {
+                btn.addEventListener('click', function() {
+                    const tabName = this.getAttribute('data-audio-tab');
+                    
+                    // Update button styles
+                    document.querySelectorAll('.audio-tab-btn').forEach(b => {
+                        b.style.background = '#f0f0f0';
+                        b.style.color = 'var(--dark-gray)';
+                    });
+                    this.style.background = 'var(--primary-green)';
+                    this.style.color = 'white';
+                    
+                    // Update content
+                    document.querySelectorAll('.audio-tab-content').forEach(content => {
+                        content.style.display = 'none';
+                    });
+                    document.getElementById(`audio-${tabName}-tab`).style.display = 'block';
+                    
+                    // Load data
+                    switch(tabName) {
+                        case 'pending': loadAudioPending(audioCurrentPage.pending); break;
+                        case 'processed': loadAudioProcessed(audioCurrentPage.processed); break;
+                        case 'failed': loadAudioFailed(audioCurrentPage.failed); break;
+                        case 'language': loadAudioLanguageBreakdown(); break;
+                        case 'analytics': loadAudioAnalytics(); break;
+                    }
+                });
+            });
+        }
+
+        // Update total count from individual container counts
+        function updateAudioTotalCount() {
+            const pending = parseInt(document.getElementById('audioPendingCount').textContent) || 0;
+            const processed = parseInt(document.getElementById('audioProcessedCount').textContent) || 0;
+            const failed = parseInt(document.getElementById('audioFailedCount').textContent) || 0;
+            document.getElementById('audioTotalCount').textContent = pending + processed + failed;
+        }
+
+        function renderAudioPagination(containerId, infoId, type, currentPage, total) {
+            const totalPages = Math.ceil(total / audioPageSize);
+            const paginationDiv = document.getElementById(containerId);
+            const infoDiv = document.getElementById(infoId);
+            
+            const startItem = currentPage * audioPageSize + 1;
+            const endItem = Math.min((currentPage + 1) * audioPageSize, total);
+            
+            infoDiv.textContent = total > 0 ? `Showing ${startItem}-${endItem} of ${total} recordings` : 'No recordings';
+            
+            if (totalPages <= 1) {
+                paginationDiv.innerHTML = '';
+                return;
+            }
+            
+            const loadFunc = type === 'processed' ? 'loadAudioProcessed' : 
+                            type === 'pending' ? 'loadAudioPending' : 'loadAudioFailed';
+            
+            let html = `
+                <button onclick="${loadFunc}(0)" ${currentPage === 0 ? 'disabled' : ''} 
+                    style="padding: 8px 16px; background: ${currentPage === 0 ? '#ccc' : 'var(--primary-green)'}; color: white; border: none; border-radius: 4px; cursor: ${currentPage === 0 ? 'not-allowed' : 'pointer'}; font-weight: 600;">
+                    First
+                </button>
+                <button onclick="${loadFunc}(${currentPage - 1})" ${currentPage === 0 ? 'disabled' : ''} 
+                    style="padding: 8px 16px; background: ${currentPage === 0 ? '#ccc' : 'var(--primary-green)'}; color: white; border: none; border-radius: 4px; cursor: ${currentPage === 0 ? 'not-allowed' : 'pointer'}; font-weight: 600;">
+                    Previous
+                </button>
+                <span style="padding: 8px 16px; background: white; border-radius: 4px; font-weight: 600; color: var(--dark-gray);">
+                    Page ${currentPage + 1} of ${totalPages}
+                </span>
+                <button onclick="${loadFunc}(${currentPage + 1})" ${currentPage >= totalPages - 1 ? 'disabled' : ''} 
+                    style="padding: 8px 16px; background: ${currentPage >= totalPages - 1 ? '#ccc' : 'var(--primary-green)'}; color: white; border: none; border-radius: 4px; cursor: ${currentPage >= totalPages - 1 ? 'not-allowed' : 'pointer'}; font-weight: 600;">
+                    Next
+                </button>
+                <button onclick="${loadFunc}(${totalPages - 1})" ${currentPage >= totalPages - 1 ? 'disabled' : ''} 
+                    style="padding: 8px 16px; background: ${currentPage >= totalPages - 1 ? '#ccc' : 'var(--primary-green)'}; color: white; border: none; border-radius: 4px; cursor: ${currentPage >= totalPages - 1 ? 'not-allowed' : 'pointer'}; font-weight: 600;">
+                    Last
+                </button>
+            `;
+            
+            paginationDiv.innerHTML = html;
+        }
+
+        function loadAudioProcessed(page = 0) {
+            // Prevent multiple simultaneous loads
+            if (window.audioLoading) {
+                return;
+            }
+            window.audioLoading = true;
+            
+            audioCurrentPage.processed = page;
+            const offset = page * audioPageSize;
+            
+            const tbody = document.getElementById('audioProcessedTable');
+            if (tbody) {
+                tbody.innerHTML = '<tr><td colspan="8" style="text-align: center; padding: 20px;"><div class="spinner"></div> Loading...</td></tr>';
+            }
+            
+            // Disable pagination buttons during load
+            const paginationDiv = document.getElementById('audioProcessedPagination');
+            if (paginationDiv) {
+                paginationDiv.style.opacity = '0.5';
+                paginationDiv.style.pointerEvents = 'none';
+            }
+            
+            fetch(`/api/audio/processed?limit=${audioPageSize}&offset=${offset}&include_transcription=false`)
+                .then(res => res.json())
+                .then(data => {
+                    const total = data.total || data.recordings.length;
+                    
+                    // Update KPI count from container response
+                    const processedCountEl = document.getElementById('audioProcessedCount');
+                    if (processedCountEl) {
+                        processedCountEl.textContent = total;
+                    }
+                    updateAudioTotalCount();
+                    
+                    renderAudioPagination('audioProcessedPagination', 'audioProcessedInfo', 'processed', page, total);
+                    
+                    // Re-enable pagination
+                    if (paginationDiv) {
+                        paginationDiv.style.opacity = '1';
+                        paginationDiv.style.pointerEvents = 'auto';
+                    }
+                    
+                    window.audioLoading = false;
+                    
+                    if (data.recordings.length === 0) {
+                        tbody.innerHTML = '<tr><td colspan="8" style="text-align: center;">No processed recordings</td></tr>';
+                        return;
+                    }
+                    
+                    // Check if user is admin (for showing review buttons)
+                    // Body class is "admin" for admin users, "customer-admin" for customer_admin users
+                    const bodyClasses = document.body.className || '';
+                    const isAdmin = bodyClasses.includes('admin') && !bodyClasses.includes('customer-admin');
+                    
+                    console.log('User role check:', {bodyClasses, isAdmin});
+                    
+                    tbody.innerHTML = data.recordings.map(rec => {
+                        const audioDur = rec.audio_duration || 0;
+                        const procTime = rec.processing_time || rec.translation_time || 0;
+                        const ratio = audioDur > 0 && procTime > 0 ? (audioDur / procTime).toFixed(2) : 'N/A';
+                        const language = rec.detected_language || rec.language_code || rec.source_language || 'Unknown';
+                        const safeFilename = rec.filename.replace(/'/g, "\\'").replace(/"/g, '&quot;').replace(/\//g, '\\/');
+                        
+                        // Build action buttons - admin gets review buttons, customer_admin only gets Listen
+                        let actionButtons = `<button onclick="viewTranslation('${safeFilename}')" style="padding: 6px 10px; background: var(--primary-green); color: white; border: none; border-radius: 4px; cursor: pointer; margin: 2px; font-size: 11px;">Listen</button>`;
+                        
+                        if (isAdmin) {
+                            // Admin can review quality - show Good/Bad buttons only if not already reviewed
+                            const currentRating = rec.quality_rating || 'unreviewed';
+                            const isReviewed = currentRating !== 'unreviewed' && currentRating !== '' && currentRating !== null;
+                            
+                            if (!isReviewed) {
+                                // Show review buttons only if not reviewed yet
+                                actionButtons += `
+                                    <button onclick="rateQuality('${safeFilename}', 'good')" style="padding: 6px 10px; background: #28a745; color: white; border: none; border-radius: 4px; cursor: pointer; margin: 2px; font-size: 11px; font-weight: 600;" title="Mark as Good Quality">✓ Good</button>
+                                    <button onclick="rateQuality('${safeFilename}', 'bad')" style="padding: 6px 10px; background: #dc3545; color: white; border: none; border-radius: 4px; cursor: pointer; margin: 2px; font-size: 11px; font-weight: 600;" title="Mark as Bad Quality">✗ Bad</button>
+                                `;
+                            } else {
+                                // Show review status if already reviewed
+                                const reviewStatus = currentRating === 'good' ? '✓ Reviewed (Good)' : '✗ Reviewed (Bad)';
+                                const reviewColor = currentRating === 'good' ? '#28a745' : '#dc3545';
+                                actionButtons += `
+                                    <span style="padding: 6px 10px; background: ${reviewColor}; color: white; border-radius: 4px; margin: 2px; font-size: 11px; font-weight: 600; display: inline-block;" title="Already reviewed as ${currentRating}">${reviewStatus}</span>
+                                `;
+                            }
+                        }
+                        
+                        return `
+                        <tr>
+                            <td style="max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${rec.filename}">${rec.filename}</td>
+                            <td>${language}</td>
+                            <td>${audioDur > 0 ? formatAudioDuration(audioDur) : 'N/A'}</td>
+                            <td>${procTime > 0 ? procTime.toFixed(1) + 's' : 'N/A'}</td>
+                            <td>${ratio !== 'N/A' ? ratio + 'x' : 'N/A'}</td>
+                            <td>${rec.upload_timestamp ? formatDateTime(rec.upload_timestamp) : 'N/A'}</td>
+                            <td><span class="status-badge status-${rec.quality_rating == 'good' ? 'active' : rec.quality_rating == 'bad' ? 'inactive' : 'neutral'}">${rec.quality_rating || 'unreviewed'}</span></td>
+                            <td>
+                                ${actionButtons}
+                            </td>
+                        </tr>
+                    `;}).join('');
+                })
+                .catch(err => {
+                    console.error('Error loading processed:', err);
+                    if (tbody) {
+                        tbody.innerHTML = '<tr><td colspan="8" style="text-align: center; color: red;">Error loading recordings. Please try again.</td></tr>';
+                    }
+                    const paginationDiv = document.getElementById('audioProcessedPagination');
+                    if (paginationDiv) {
+                        paginationDiv.style.opacity = '1';
+                        paginationDiv.style.pointerEvents = 'auto';
+                    }
+                    window.audioLoading = false;
+                });
+        }
+
+        function loadAudioPending(page = 0) {
+            audioCurrentPage.pending = page;
+            const offset = page * audioPageSize;
+            
+            const tbody = document.getElementById('audioPendingTable');
+            if (tbody) {
+                tbody.innerHTML = '<tr><td colspan="4" style="text-align: center;"><div class="spinner"></div> Loading...</td></tr>';
+            }
+            
+            fetch(`/api/audio/pending?limit=${audioPageSize}&offset=${offset}`)
+                .then(res => res.json())
+                .then(data => {
+                    const tbody = document.getElementById('audioPendingTable');
+                    const total = data.total || data.recordings.length;
+                    
+                    // Update KPI count from container response
+                    document.getElementById('audioPendingCount').textContent = total;
+                    updateAudioTotalCount();
+                    
+                    renderAudioPagination('audioPendingPagination', 'audioPendingInfo', 'pending', page, total);
+                    
+                    if (data.recordings.length === 0) {
+                        tbody.innerHTML = '<tr><td colspan="4" style="text-align: center;">No pending recordings</td></tr>';
+                        return;
+                    }
+                    
+                    tbody.innerHTML = data.recordings.map(rec => `
+                        <tr>
+                            <td>${rec.filename}</td>
+                            <td>${formatDateTime(rec.upload_timestamp)}</td>
+                            <td>${formatFileSize(rec.size)}</td>
+                            <td><span class="status-badge" style="background: #fff3cd; color: #856404;">Pending</span></td>
+                        </tr>
+                    `).join('');
+                })
+                .catch(err => console.error('Error loading pending:', err));
+        }
+
+        function loadAudioFailed(page = 0) {
+            audioCurrentPage.failed = page;
+            const offset = page * audioPageSize;
+            
+            const tbody = document.getElementById('audioFailedTable');
+            if (tbody) {
+                tbody.innerHTML = '<tr><td colspan="5" style="text-align: center;"><div class="spinner"></div> Loading...</td></tr>';
+            }
+            
+            fetch(`/api/audio/failed?limit=${audioPageSize}&offset=${offset}`)
+                .then(res => res.json())
+                .then(data => {
+                    const tbody = document.getElementById('audioFailedTable');
+                    const total = data.total || data.recordings.length;
+                    
+                    // Update KPI count from container response
+                    document.getElementById('audioFailedCount').textContent = total;
+                    updateAudioTotalCount();
+                    
+                    renderAudioPagination('audioFailedPagination', 'audioFailedInfo', 'failed', page, total);
+                    
+                    if (data.recordings.length === 0) {
+                        tbody.innerHTML = '<tr><td colspan="5" style="text-align: center;">No failed recordings</td></tr>';
+                        return;
+                    }
+                    
+                    tbody.innerHTML = data.recordings.map(rec => `
+                        <tr>
+                            <td style="max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${rec.filename}">${rec.filename}</td>
+                            <td>${formatDateTime(rec.failure_timestamp)}</td>
+                            <td><span class="status-badge" style="background: #f8d7da; color: #721c24;">${rec.stage || 'unknown'}</span></td>
+                            <td style="max-width: 300px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${rec.error || 'Unknown error'}">${rec.error || 'Unknown error'}</td>
+                            <td>
+                                <button onclick="retryRecording('${rec.filename.replace(/'/g, "\\'")}')" style="padding: 6px 12px; background: var(--orange); color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 12px;">Retry</button>
+                            </td>
+                        </tr>
+                    `).join('');
+                })
+                .catch(err => console.error('Error loading failed:', err));
+        }
+
+        function loadAudioLanguageBreakdown() {
+            fetch('/api/audio/language-breakdown')
+                .then(res => res.json())
+                .then(data => {
+                    const content = document.getElementById('audioLanguageContent');
+                    
+                    if (data.error) {
+                        content.innerHTML = `<p style="color: red;">Error: ${data.error}</p>`;
+                        return;
+                    }
+                    
+                    const languages = data.language_details || {};
+                    const total = data.total_recordings || 0;
+                    
+                    // Create chart data
+                    const langLabels = Object.keys(languages);
+                    const langCounts = langLabels.map(lang => languages[lang].count);
+                    const langColors = [
+                        'rgba(45, 95, 63, 0.8)',   // primary-green
+                        'rgba(61, 127, 95, 0.8)',  // secondary-green
+                        'rgba(74, 142, 139, 0.8)', // teal
+                        'rgba(232, 128, 59, 0.8)', // orange
+                        'rgba(220, 53, 69, 0.8)',  // red
+                        'rgba(108, 117, 125, 0.8)', // gray
+                    ];
+                    
+                    content.innerHTML = `
+                        <div style="margin-bottom: 30px;">
+                            <div class="kpi-card" style="background: linear-gradient(135deg, var(--primary-green), var(--secondary-green)); margin-bottom: 20px;">
+                                <div class="kpi-value">${total}</div>
+                                <div class="kpi-label">TOTAL RECORDINGS</div>
+                            </div>
+                        </div>
+                        
+                        <!-- Language Chart -->
+                        <div class="chart-container" style="margin-bottom: 30px;">
+                            <div class="chart-title">Recordings by Language</div>
+                            <canvas id="languageBreakdownChart" style="max-height: 400px;"></canvas>
+                        </div>
+                        
+                        <!-- Language Details Table -->
+                        <div class="chart-container">
+                            <div class="chart-title">Language Statistics</div>
+                            <div class="table-container" style="margin-top: 15px;">
+                                <table class="position-table" style="width: 100%;">
+                                    <thead>
+                                        <tr>
+                                            <th>Language</th>
+                                            <th>Count</th>
+                                            <th>Percentage</th>
+                                            <th>Avg Duration</th>
+                                            <th>Avg Processing Time</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        ${langLabels.map(lang => {
+                                            const details = languages[lang];
+                                            const percentage = total > 0 ? ((details.count / total) * 100).toFixed(1) : 0;
+                                            return `
+                                                <tr>
+                                                    <td><strong>${lang}</strong></td>
+                                                    <td>${details.count}</td>
+                                                    <td>${percentage}%</td>
+                                                    <td>${details.avg_duration ? formatAudioDuration(details.avg_duration) : 'N/A'}</td>
+                                                    <td>${details.avg_processing_time ? details.avg_processing_time.toFixed(2) + 's' : 'N/A'}</td>
+                                                </tr>
+                                            `;
+                                        }).join('')}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    `;
+                    
+                    // Create chart
+                    if (langLabels.length > 0) {
+                        const ctx = document.getElementById('languageBreakdownChart').getContext('2d');
+                        new Chart(ctx, {
+                            type: 'bar',
+                            data: {
+                                labels: langLabels,
+                                datasets: [{
+                                    label: 'Number of Recordings',
+                                    data: langCounts,
+                                    backgroundColor: langColors.slice(0, langLabels.length),
+                                    borderColor: langColors.slice(0, langLabels.length).map(c => c.replace('0.8', '1')),
+                                    borderWidth: 2
+                                }]
+                            },
+                            options: {
+                                responsive: true,
+                                maintainAspectRatio: true,
+                                plugins: {
+                                    legend: {
+                                        display: false
+                                    },
+                                    title: {
+                                        display: true,
+                                        text: 'Recordings Distribution by Language',
+                                        font: {
+                                            size: 16,
+                                            weight: 'bold'
+                                        }
+                                    }
+                                },
+                                scales: {
+                                    y: {
+                                        beginAtZero: true,
+                                        ticks: {
+                                            stepSize: 1
+                                        }
+                                    }
+                                }
+                            }
+                        });
+                    }
+                })
+                .catch(err => {
+                    console.error('Error loading language breakdown:', err);
+                    document.getElementById('audioLanguageContent').innerHTML = '<p style="color: red;">Error loading language breakdown data</p>';
+                });
+        }
+
+        function loadAudioAnalytics() {
+            const content = document.getElementById('audioAnalyticsContent');
+            if (content) {
+                content.innerHTML = '<p style="text-align: center; padding: 20px;"><div class="spinner"></div> Loading analytics...</p>';
+            }
+            
+            // Add cache-busting parameter to ensure fresh data
+            const cacheBuster = new Date().getTime();
+            fetch(`/api/audio/analytics?days=30&_t=${cacheBuster}`)
+                .then(res => res.json())
+                .then(data => {
+                    console.log('Analytics data loaded:', data);
+                    console.log('Quality breakdown:', data.quality_breakdown);
+                    
+                    if (!content) return;
+                    
+                    // Calculate additional metrics
+                    const failureRate = data.failure_rate || (100 - (data.success_rate || 0));
+                    const totalProcessed = data.total_processed || 0;
+                    const totalFailed = data.total_failed || 0;
+                    const totalRecordings = data.total_recordings || (totalProcessed + totalFailed);
+                    
+                    content.innerHTML = `
+                        <!-- Summary KPIs -->
+                        <div class="kpi-row" style="margin-bottom: 30px;">
+                            <div class="kpi-card" style="background: linear-gradient(135deg, #28a745, #20c997);">
+                                <div class="kpi-value">${totalProcessed}</div>
+                                <div class="kpi-label">TOTAL PROCESSED</div>
+                            </div>
+                            <div class="kpi-card" style="background: linear-gradient(135deg, #dc3545, #c82333);">
+                                <div class="kpi-value">${totalFailed}</div>
+                                <div class="kpi-label">TOTAL FAILED</div>
+                            </div>
+                            <div class="kpi-card" style="background: ${data.success_rate >= 90 ? 'linear-gradient(135deg, #28a745, #20c997)' : data.success_rate >= 70 ? 'linear-gradient(135deg, #ffc107, #ff9800)' : 'linear-gradient(135deg, #dc3545, #c82333)'};">
+                                <div class="kpi-value">${data.success_rate || 0}%</div>
+                                <div class="kpi-label">SUCCESS RATE</div>
+                            </div>
+                            <div class="kpi-card" style="background: linear-gradient(135deg, #dc3545, #ff6b6b);">
+                                <div class="kpi-value">${failureRate.toFixed(1)}%</div>
+                                <div class="kpi-label">FAILURE RATE</div>
+                            </div>
+                        </div>
+                        
+                        <!-- Processing Metrics -->
+                        <div class="kpi-row" style="margin-bottom: 30px;">
+                            <div class="kpi-card" style="background: linear-gradient(135deg, var(--teal), var(--primary-green));">
+                                <div class="kpi-value">${data.avg_processing_time || 0}s</div>
+                                <div class="kpi-label">AVG PROCESSING TIME</div>
+                            </div>
+                            <div class="kpi-card" style="background: linear-gradient(135deg, #6c757d, #495057);">
+                                <div class="kpi-value">${data.avg_audio_duration ? formatAudioDuration(data.avg_audio_duration) : 'N/A'}</div>
+                                <div class="kpi-label">AVG AUDIO DURATION</div>
+                            </div>
+                            <div class="kpi-card" style="background: linear-gradient(135deg, var(--secondary-green), var(--primary-green));">
+                                <div class="kpi-value">${data.processing_ratio || 0}x</div>
+                                <div class="kpi-label">SPEED RATIO (Audio/Processing)</div>
+                            </div>
+                            <div class="kpi-card" style="background: linear-gradient(135deg, #20c997, #28a745);">
+                                <div class="kpi-value">${data.quality_score || 0}%</div>
+                                <div class="kpi-label">QUALITY SCORE</div>
+                            </div>
+                        </div>
+                        
+                        <!-- Quality Breakdown -->
+                        <div class="chart-container" style="margin-bottom: 30px;">
+                            <div class="chart-title">Quality Review Breakdown</div>
+                            <div style="display: flex; gap: 20px; flex-wrap: wrap; margin-top: 15px;">
+                                <div style="flex: 1; min-width: 150px; background: #d4edda; padding: 20px; border-radius: 8px; text-align: center;">
+                                    <div style="font-size: 32px; font-weight: bold; color: #155724;">${data.quality_breakdown?.good || 0}</div>
+                                    <div style="color: #155724;">Good</div>
+                                </div>
+                                <div style="flex: 1; min-width: 150px; background: #f8d7da; padding: 20px; border-radius: 8px; text-align: center;">
+                                    <div style="font-size: 32px; font-weight: bold; color: #721c24;">${data.quality_breakdown?.bad || 0}</div>
+                                    <div style="color: #721c24;">Bad</div>
+                                </div>
+                                <div style="flex: 1; min-width: 150px; background: #fff3cd; padding: 20px; border-radius: 8px; text-align: center;">
+                                    <div style="font-size: 32px; font-weight: bold; color: #856404;">${data.quality_breakdown?.unreviewed || 0}</div>
+                                    <div style="color: #856404;">Unreviewed</div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Language Breakdown -->
+                        <div class="chart-container" style="margin-bottom: 30px;">
+                            <div class="chart-title">Language Breakdown</div>
+                            <div class="table-container" style="margin-top: 15px;">
+                                <table class="position-table" style="width: 100%;">
+                                    <thead>
+                                        <tr>
+                                            <th>Language</th>
+                                            <th>Count</th>
+                                            <th>Percentage</th>
+                                            <th>Avg Processing Time</th>
+                                            <th>Total Processing Time</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        ${Object.entries(data.language_breakdown || {}).map(([lang, info]) => {
+                                            const percentage = totalProcessed > 0 ? ((info.count / totalProcessed) * 100).toFixed(1) : 0;
+                                            return `
+                                            <tr>
+                                                <td><strong>${lang}</strong></td>
+                                                <td>${info.count}</td>
+                                                <td>
+                                                    <div style="background: #e9ecef; border-radius: 4px; overflow: hidden;">
+                                                        <div style="background: var(--primary-green); width: ${percentage}%; height: 20px; display: flex; align-items: center; justify-content: center; color: white; font-size: 11px;">
+                                                            ${percentage}%
+                                                        </div>
+                                                    </div>
+                                                </td>
+                                                <td>${info.avg_processing_time || 0}s</td>
+                                                <td>${(info.total_processing_time || 0).toFixed(1)}s</td>
+                                            </tr>
+                                        `;}).join('')}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                        
+                        <!-- Processing Time Trend (if available) -->
+                        ${data.processing_time_trend && data.processing_time_trend.length > 0 ? `
+                        <div class="chart-container">
+                            <div class="chart-title">Processing Time Trend (Last 30 Days)</div>
+                            <div class="table-container" style="margin-top: 15px;">
+                                <table class="position-table" style="width: 100%;">
+                                    <thead>
+                                        <tr>
+                                            <th>Date</th>
+                                            <th>Recordings</th>
+                                            <th>Avg Processing Time</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        ${data.processing_time_trend.slice(-10).map(day => `
+                                            <tr>
+                                                <td>${day.date}</td>
+                                                <td>${day.count || 0}</td>
+                                                <td>${day.avg_processing_time || 0}s</td>
+                                            </tr>
+                                        `).join('')}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                        ` : ''}
+                    `;
+                })
+                .catch(err => {
+                    console.error('Error loading analytics:', err);
+                    document.getElementById('audioAnalyticsContent').innerHTML = '<p style="color: red;">Error loading analytics data</p>';
+                });
+        }
+
+        function viewTranslation(filename) {
+            fetch(`/api/audio/detail/${encodeURIComponent(filename)}?container=processed`)
+                .then(res => res.json())
+                .then(data => {
+                    document.getElementById('translationModal').style.display = 'block';
+                    document.getElementById('modalFilename').textContent = filename;
+                    document.getElementById('modalAudio').src = data.url;
+                    
+                    // Check user role from body class
+                    const isCustomerAdmin = document.body.classList.contains('customer-admin');
+                    
+                    if (data.transcription) {
+                        const t = data.transcription;
+                        const audioDur = t.audio_duration || 0;
+                        const procTime = t.translation_time || 0;
+                        const ratio = audioDur > 0 && procTime > 0 ? (audioDur / procTime).toFixed(2) : 'N/A';
+                        
+                        // Show original transcription
+                        document.getElementById('modalTranscription').textContent = t.transcription || t.original_text || 'Original transcription not available';
+                        
+                        // Hide translation section for customer_admin
+                        const translationSection = document.getElementById('translationSection');
+                        if (isCustomerAdmin) {
+                            translationSection.style.display = 'none';
+                        } else {
+                            translationSection.style.display = 'block';
+                            // Show English translation for admin
+                            document.getElementById('modalTranslation').textContent = t.translation || 'No translation available';
+                            document.getElementById('modalTranslation').style.color = '';
+                            document.getElementById('modalTranslation').style.fontStyle = '';
+                        }
+                        
+                        // Show metadata in grid format
+                        document.getElementById('modalMetadata').innerHTML = `
+                            <div style="background: #f8f9fa; padding: 15px; border-radius: 8px;">
+                                <strong>Language</strong><br>
+                                <span style="font-size: 18px; color: var(--primary-green);">${t.detected_language || 'Unknown'}</span>
+                                <span style="color: #666; font-size: 12px;">(${t.language_code || 'N/A'})</span>
+                            </div>
+                            <div style="background: #f8f9fa; padding: 15px; border-radius: 8px;">
+                                <strong>Confidence</strong><br>
+                                <span style="font-size: 18px; color: var(--primary-green);">${t.language_confidence ? (t.language_confidence * 100).toFixed(1) + '%' : 'N/A'}</span>
+                            </div>
+                            <div style="background: #f8f9fa; padding: 15px; border-radius: 8px;">
+                                <strong>Audio Duration</strong><br>
+                                <span style="font-size: 18px; color: var(--primary-green);">${audioDur ? formatAudioDuration(audioDur) : 'N/A'}</span>
+                            </div>
+                            <div style="background: #f8f9fa; padding: 15px; border-radius: 8px;">
+                                <strong>Processing Time</strong><br>
+                                <span style="font-size: 18px; color: var(--primary-green);">${procTime ? procTime.toFixed(2) + 's' : 'N/A'}</span>
+                            </div>
+                            <div style="background: #f8f9fa; padding: 15px; border-radius: 8px;">
+                                <strong>Speed Ratio</strong><br>
+                                <span style="font-size: 18px; color: var(--primary-green);">${ratio}x</span>
+                            </div>
+                            <div style="background: #f8f9fa; padding: 15px; border-radius: 8px;">
+                                <strong>Word Count</strong><br>
+                                <span style="font-size: 18px; color: var(--primary-green);">${t.word_count || 'N/A'}</span>
+                            </div>
+                        `;
+                    } else {
+                        document.getElementById('modalTranscription').textContent = 'Original transcription not available';
+                        document.getElementById('modalTranslation').textContent = 'Translation not available';
+                        document.getElementById('modalMetadata').innerHTML = '<div style="background: #f8f9fa; padding: 15px; border-radius: 8px; grid-column: 1/-1;">No metadata available</div>';
+                    }
+                })
+                .catch(err => {
+                    console.error('Error loading translation:', err);
+                    alert('Error loading translation');
+                });
+        }
+
+        function closeTranslationModal() {
+            document.getElementById('translationModal').style.display = 'none';
+            const audio = document.getElementById('modalAudio');
+            audio.pause();
+            audio.src = '';
+        }
+
+        function rateQuality(filename, rating) {
+            if (!confirm(`Mark this recording as "${rating === 'good' ? 'Good' : 'Bad'}" quality?\n\nFile: ${filename}`)) {
+                return;
+            }
+            
+            const notes = rating === 'bad' ? prompt('Optional notes about the issue:') || '' : '';
+            
+            console.log('Submitting quality feedback:', {filename, rating, notes});
+            
+            fetch('/api/audio/quality-feedback', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({filename, rating, notes})
+            })
+            .then(res => res.json())
+            .then(result => {
+                console.log('Quality feedback response:', result);
+                if (result.success) {
+                    // Show success message
+                    const message = result.transcription_updated 
+                        ? `Quality feedback recorded as "${rating}"! Updated in both recording and transcription metadata.`
+                        : `Quality feedback recorded as "${rating}"!`;
+                    
+                    // Reload all relevant data to update counts
+                    // Reload processed recordings to show updated quality rating (buttons will be disabled)
+                    setTimeout(() => {
+                        loadAudioProcessed(audioCurrentPage.processed);
+                    }, 500);
+                    
+                    // Always reload analytics to update quality breakdown counts (good/bad/unreviewed)
+                    // Add delays to ensure Azure metadata has propagated
+                    setTimeout(() => {
+                        loadAudioAnalytics();
+                    }, 1500);
+                    
+                    // Also reload again after longer delay to ensure metadata is fully propagated
+                    setTimeout(() => {
+                        loadAudioAnalytics();
+                    }, 3000);
+                    
+                    // Also reload if analytics tab is currently active
+                    const activeTab = document.querySelector('.audio-tab-btn.active');
+                    if (activeTab) {
+                        const activeTabName = activeTab.getAttribute('data-audio-tab');
+                        if (activeTabName === 'analytics') {
+                            setTimeout(() => {
+                                loadAudioAnalytics();
+                            }, 2000);
+                        }
+                    }
+                    
+                    // Show success notification
+                    alert(message);
+                } else {
+                    alert('Error: ' + (result.error || 'Failed to save quality feedback'));
+                }
+            })
+            .catch(err => {
+                console.error('Error rating quality:', err);
+                alert('Error recording feedback: ' + err.message);
+            });
+        }
+
+        function retryRecording(filename) {
+            if (!confirm(`Retry processing for:\n${filename}?`)) return;
+            
+            fetch(`/api/audio/retry/${encodeURIComponent(filename)}`, {method: 'POST'})
+                .then(res => res.json())
+                .then(result => {
+                    if (result.success) {
+                        alert('Recording moved to pending queue for reprocessing!');
+                        loadAudioFailed();
+                        loadAudioPending();
+                    } else {
+                        alert('Error: ' + result.error);
+                    }
+                })
+                .catch(err => {
+                    console.error('Error retrying:', err);
+                    alert('Error retrying recording');
+                });
+        }
+
+        function formatDateTime(dateString) {
+            if (!dateString) return 'N/A';
+            return new Date(dateString).toLocaleString();
+        }
+
+        function formatFileSize(bytes) {
+            if (!bytes) return 'N/A';
+            const sizes = ['B', 'KB', 'MB', 'GB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(1024));
+            return (bytes / Math.pow(1024, i)).toFixed(2) + ' ' + sizes[i];
+        }
+
+        function formatAudioDuration(seconds) {
+            if (!seconds) return 'N/A';
+            const mins = Math.floor(seconds / 60);
+            const secs = Math.floor(seconds % 60);
+            return `${mins}:${secs.toString().padStart(2, '0')}`;
+        }
+
+        // Initialize
+        document.addEventListener('DOMContentLoaded', function() {
+            setupNavigation();
+            loadFilterOptions();
+            loadHomeData();
+        });
+    </script>
+</body>
+</html>

@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Dashboard</title>
+    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
+</head>
+<body>
+    <nav class="navbar navbar-expand-lg navbar-light bg-light">
+        <a class="navbar-brand" href="#">FieldForce Demo</a>
+        <div class="collapse navbar-collapse" id="navbarNav">
+            <ul class="navbar-nav ml-auto">
+                <li class="nav-item">
+                    <a class="nav-link" href="/logout">Logout</a>
+                </li>
+            </ul>
+        </div>
+    </nav>
+    <div class="container mt-5">
+        <div class="alert alert-success" role="alert">
+            Welcome, {{ session.username }}! You are logged in.
+        </div>
+        <h1>FieldForce Dashboard</h1>
+        <p>This is a placeholder for your main application dashboard. All protected API routes should now be accessible after logging in.</p>
+        <p>You can integrate your existing data visualization and other functionalities here.</p>
+
+        <!-- Example of how you might fetch data (requires JavaScript) -->
+        <h3>Example Data Fetch (Inspect Network Tab)</h3>
+        <button class="btn btn-info" id="fetchKpis">Fetch Home KPIs</button>
+        <pre id="kpiData" class="mt-3 bg-light p-3"></pre>
+
+        <script>
+            document.getElementById('fetchKpis').addEventListener('click', function() {
+                fetch('/api/home/kpis')
+                    .then(response => {
+                        if (response.redirected) {
+                            window.location.href = response.url; // Redirect to login if not authenticated
+                            return;
+                        }
+                        return response.json();
+                    })
+                    .then(data => {
+                        document.getElementById('kpiData').textContent = JSON.stringify(data, null, 2);
+                    })
+                    .catch(error => {
+                        console.error('Error fetching KPIs:', error);
+                        document.getElementById('kpiData').textContent = 'Error loading data: ' + error;
+                    });
+            });
+        </script>
+    </div>
+</body>
+</html>
