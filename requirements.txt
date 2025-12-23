@@ -1,0 +1,18 @@
+# Core Flask dependencies
+flask
+Flask-Bcrypt
+
+# JWT authentication
+PyJWT
+cryptography
+
+# Azure Storage (for audio monitoring)
+azure-storage-blob
+
+# Data processing
+python-dateutil
+python-dotenv
+
+# Production server
+gunicorn
+

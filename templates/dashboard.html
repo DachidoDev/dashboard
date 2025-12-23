@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Coromandel - FieldForce Dashboard</title>
+    <title>{{ organization_display_name }} - FieldForce Dashboard</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/wordcloud2.js/1.2.2/wordcloud2.min.js"></script>
     <style>
@@ -547,8 +547,8 @@
 <body class="{{ 'admin' if user_role == 'admin' else 'customer-admin' }}">
     <div class="header">
         <div class="logo">
-            <div class="logo-icon">C</div>
-            <span class="logo-text">Coromandel</span>
+            <div class="logo-icon">{{ organization_display_name[0]|upper }}</div>
+            <span class="logo-text">{{ organization_display_name }}</span>
         </div>
         <nav class="nav-menu">
             <div class="nav-item active" data-module="home">HOME</div>
@@ -556,14 +556,24 @@
             <div class="nav-item" data-module="operations">OPERATIONS</div>
             <div class="nav-item" data-module="engagement">ENGAGEMENT</div>
             <div class="nav-item" data-module="admin">ADMIN</div>
-            <div class="nav-item" data-module="audio">AUDIO MONITOR</div>
+            <div class="nav-item" data-module="audio">LIBRARY</div>
         </nav>
         <div style="display: flex; align-items: center; gap: 20px;">
+            {% if is_dachido_admin %}
+            <div class="filter-group" style="margin: 0;">
+                <select class="filter-select" id="organizationSelector" style="min-width: 180px; font-weight: 600; background-color: #f8f9fa;">
+                    <option value="">All Organizations</option>
+                    {% for org in all_organizations %}
+                    <option value="{{ org.name }}">{{ org.display_name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            {% endif %}
             <div style="font-size: 14px; color: #666;">
-                <strong>{{ session.username }}</strong>
-                <span style="background-color: {{ '#2d5f3f' if user_role == 'admin' else '#4a8e8b' }}; color: white; padding: 2px 8px; border-radius: 3px; font-size: 11px; margin-left: 5px;">
-                    {{ 'ADMIN' if user_role == 'admin' else 'CUSTOMER' }}
+                <span style="background-color: {{ '#2d5f3f' if user_role == 'admin' or is_dachido_admin else '#4a8e8b' }}; color: white; padding: 2px 8px; border-radius: 3px; font-size: 11px;">
+                    {{ 'DACHIDO ADMIN' if is_dachido_admin else ('ADMIN' if user_role == 'admin' else 'CUSTOMER') }}
                 </span>
+                <span style="margin-left: 10px; color: #666;">{{ username }}</span>
             </div>
             <div class="fieldforce-badge">
                 ⚡ FieldForce
@@ -1058,7 +1068,7 @@
             </div>
         </div>
 
-        <!-- AUDIO MONITOR MODULE -->
+        <!-- LIBRARY MODULE -->
         <div class="module-view" id="audio-module">
             <div class="kpi-row">
                 <div class="kpi-card" style="background: linear-gradient(135deg, #ffc107, #ff9800);">
@@ -1280,7 +1290,7 @@
                         'operations': 'Operations Dashboard',
                         'engagement': 'Engagement Metrics',
                         'admin': 'Admin Panel',
-                        'audio': 'Audio Processing Monitor'
+                        'audio': 'Library'
                     };
                     document.getElementById('current-module').textContent = moduleNames[module];
                     
@@ -1378,7 +1388,7 @@
                     document.getElementById('marketHealth').textContent = data.market_health;
                 });
 
-            fetch(`/api/home/volume-sentiment?date=${dateFilter}`)
+            fetch(`/api/home/volume-sentiment?date=${dateFilter}${orgParam}`)
                 .then(res => res.json())
                 .then(data => {
                     const ctx = document.getElementById('volumeSentimentChart').getContext('2d');
@@ -1475,7 +1485,7 @@
                     }
                 });
 
-            fetch('/api/home/market-share')
+            fetch(appendOrgParam('/api/home/market-share'))
                 .then(res => res.json())
                 .then(data => {
                     const ctx = document.getElementById('marketShareChart').getContext('2d');
@@ -1516,7 +1526,7 @@
                     });
                 });
 
-            fetch('/api/home/competitive-position')
+            fetch(appendOrgParam('/api/home/competitive-position'))
                 .then(res => res.json())
                 .then(data => {
                     const table = document.getElementById('competitivePositionTable');
@@ -1537,7 +1547,7 @@
                     }).join('');
                 });
 
-            fetch('/api/home/conversation-drivers')
+            fetch(appendOrgParam('/api/home/conversation-drivers'))
                 .then(res => res.json())
                 .then(data => {
                     const ctx = document.getElementById('conversationDriversChart').getContext('2d');
@@ -1583,7 +1593,7 @@
                     });
                 });
 
-            fetch(`/api/marketing/conv-volume-by-topic?date=${dateFilter}`)
+            fetch(appendOrgParam(`/api/marketing/conv-volume-by-topic?date=${dateFilter}`))
                 .then(res => res.json())
                 .then(data => {
                     const ctx = document.getElementById('convVolumeTopicChart').getContext('2d');
@@ -1602,7 +1612,7 @@
                     });
                 });
 
-            fetch('/api/marketing/brand-keywords')
+            fetch(appendOrgParam('/api/marketing/brand-keywords'))
                 .then(res => res.json())
                 .then(data => {
                     const canvas = document.getElementById('wordCloudCanvas');
@@ -1670,7 +1680,7 @@
                     ctx.fillText('Error loading brand keywords', canvas.width / 2, canvas.height / 2);
                 });
 
-            fetch(`/api/marketing/market-share-trend?date=${dateFilter}`)
+            fetch(appendOrgParam(`/api/marketing/market-share-trend?date=${dateFilter}`))
                 .then(res => res.json())
                 .then(data => {
                     const ctx = document.getElementById('marketShareTrendChart').getContext('2d');
@@ -1721,7 +1731,7 @@
                     });
                 });
 
-            fetch('/api/marketing/competitive-landscape')
+            fetch(appendOrgParam('/api/marketing/competitive-landscape'))
                 .then(res => res.json())
                 .then(data => {
                     const ctx = document.getElementById('competitiveLandscapeChart').getContext('2d');
@@ -1761,7 +1771,7 @@
                     });
                 });
 
-            fetch(`/api/marketing/sentiment-by-competitor?date=${dateFilter}`)
+            fetch(appendOrgParam(`/api/marketing/sentiment-by-competitor?date=${dateFilter}`))
                 .then(res => res.json())
                 .then(data => {
                     const ctx = document.getElementById('sentimentCompetitorChart').getContext('2d');
@@ -1809,7 +1819,7 @@
                     console.error('Error loading sentiment by competitor:', err);
                 });
 
-            fetch('/api/marketing/brand-crop-association')
+            fetch(appendOrgParam('/api/marketing/brand-crop-association'))
                 .then(res => res.json())
                 .then(data => {
                     const brandSelect = document.getElementById('brandFilterAssoc');
@@ -1896,7 +1906,7 @@
         function loadOperationsData() {
             const dateFilter = getDateFilter();
 
-            fetch('/api/operations/urgent-issues')
+            fetch(appendOrgParam('/api/operations/urgent-issues'))
                 .then(res => res.json())
                 .then(data => {
                     const table = document.getElementById('urgentIssuesTable');
@@ -1916,7 +1926,7 @@
                     }
                 });
 
-            fetch(`/api/operations/demand-signal-trend?date=${dateFilter}`)
+            fetch(appendOrgParam(`/api/operations/demand-signal-trend?date=${dateFilter}`))
                 .then(res => res.json())
                 .then(data => {
                     const ctx = document.getElementById('demandSignalChart').getContext('2d');
@@ -1933,7 +1943,7 @@
                     });
                 });
 
-            fetch('/api/operations/demand-change-alert')
+            fetch(appendOrgParam('/api/operations/demand-change-alert'))
                 .then(res => res.json())
                 .then(data => {
                     const table = document.getElementById('demandChangeTable');
@@ -1947,7 +1957,7 @@
                     `).join('');
                 });
 
-            fetch(`/api/operations/problem-trend?date=${dateFilter}`)
+            fetch(appendOrgParam(`/api/operations/problem-trend?date=${dateFilter}`))
                 .then(res => res.json())
                 .then(data => {
                     const ctx = document.getElementById('problemTrendChart').getContext('2d');
@@ -1963,7 +1973,7 @@
                     });
                 });
 
-            fetch('/api/operations/problem-sentiment')
+            fetch(appendOrgParam('/api/operations/problem-sentiment'))
                 .then(res => res.json())
                 .then(data => {
                     const ctx = document.getElementById('problemSentimentChart').getContext('2d');
@@ -2013,7 +2023,7 @@
                     });
                 });
 
-            fetch('/api/operations/crop-keywords')
+            fetch(appendOrgParam('/api/operations/crop-keywords'))
                 .then(res => res.json())
                 .then(data => {
                     const canvas = document.getElementById('cropWordCloudCanvas');
@@ -2114,7 +2124,7 @@
                     });
                 });
 
-            fetch('/api/operations/sentiment-by-crop')
+            fetch(appendOrgParam('/api/operations/sentiment-by-crop'))
                 .then(res => res.json())
                 .then(data => {
                     const ctx = document.getElementById('sentimentCropChart').getContext('2d');
@@ -2163,7 +2173,7 @@
                     });
                 });
 
-            fetch('/api/operations/crop-pest-heatmap')
+            fetch(appendOrgParam('/api/operations/crop-pest-heatmap'))
                 .then(res => res.json())
                 .then(data => {
                     const headerEl = document.getElementById('cropPestHeatmapHeader');
@@ -2225,7 +2235,7 @@
         function loadEngagementData() {
             const dateFilter = getDateFilter();
 
-            fetch('/api/engagement/conv-by-region')
+            fetch(appendOrgParam('/api/engagement/conv-by-region'))
                 .then(res => res.json())
                 .then(data => {
                     const ctx = document.getElementById('convByRegionChart').getContext('2d');
@@ -2239,7 +2249,7 @@
                     });
                 });
 
-            fetch('/api/engagement/team-urgency')
+            fetch(appendOrgParam('/api/engagement/team-urgency'))
                 .then(res => res.json())
                 .then(data => {
                     const ctx = document.getElementById('teamUrgencyChart').getContext('2d');
@@ -2252,7 +2262,7 @@
                     });
                 });
 
-            fetch('/api/engagement/team-intent')
+            fetch(appendOrgParam('/api/engagement/team-intent'))
                 .then(res => res.json())
                 .then(data => {
                     const ctx = document.getElementById('teamIntentChart').getContext('2d');
@@ -2616,7 +2626,7 @@
                 });
         }
 
-        // AUDIO MONITORING MODULE
+        // LIBRARY MODULE
         function loadAudioData() {
             // Load overview first (fast), then load tabs in parallel
             loadAudioOverview();
@@ -2648,7 +2658,7 @@
 
         function loadAudioOverview() {
             // Load overview statistics (pending, processed, failed counts)
-            fetch('/api/audio/overview')
+            fetch(appendOrgParam('/api/audio/overview'))
                 .then(res => res.json())
                 .then(data => {
                     if (data.pending !== undefined) {
@@ -2779,7 +2789,8 @@
                 paginationDiv.style.pointerEvents = 'none';
             }
             
-            fetch(`/api/audio/processed?limit=${audioPageSize}&offset=${offset}&include_transcription=false`)
+            const orgParam = getOrganizationParam();
+            fetch(`/api/audio/processed?limit=${audioPageSize}&offset=${offset}&include_transcription=false${orgParam}`)
                 .then(res => res.json())
                 .then(data => {
                     const total = data.total || data.recordings.length;
@@ -2882,7 +2893,8 @@
                 tbody.innerHTML = '<tr><td colspan="4" style="text-align: center;"><div class="spinner"></div> Loading...</td></tr>';
             }
             
-            fetch(`/api/audio/pending?limit=${audioPageSize}&offset=${offset}`)
+            const orgParam = getOrganizationParam();
+            fetch(`/api/audio/pending?limit=${audioPageSize}&offset=${offset}${orgParam}`)
                 .then(res => res.json())
                 .then(data => {
                     const tbody = document.getElementById('audioPendingTable');
@@ -2920,7 +2932,8 @@
                 tbody.innerHTML = '<tr><td colspan="5" style="text-align: center;"><div class="spinner"></div> Loading...</td></tr>';
             }
             
-            fetch(`/api/audio/failed?limit=${audioPageSize}&offset=${offset}`)
+            const orgParam = getOrganizationParam();
+            fetch(`/api/audio/failed?limit=${audioPageSize}&offset=${offset}${orgParam}`)
                 .then(res => res.json())
                 .then(data => {
                     const tbody = document.getElementById('audioFailedTable');
@@ -2953,7 +2966,7 @@
         }
 
         function loadAudioLanguageBreakdown() {
-            fetch('/api/audio/language-breakdown')
+            fetch(appendOrgParam('/api/audio/language-breakdown'))
                 .then(res => res.json())
                 .then(data => {
                     const content = document.getElementById('audioLanguageContent');
@@ -3083,7 +3096,8 @@
             
             // Add cache-busting parameter to ensure fresh data
             const cacheBuster = new Date().getTime();
-            fetch(`/api/audio/analytics?days=30&_t=${cacheBuster}`)
+            const orgParam = getOrganizationParam();
+            fetch(`/api/audio/analytics?days=30&_t=${cacheBuster}${orgParam}`)
                 .then(res => res.json())
                 .then(data => {
                     console.log('Analytics data loaded:', data);
@@ -3409,11 +3423,100 @@
             return `${mins}:${secs.toString().padStart(2, '0')}`;
         }
 
+        // Helper function to get organization parameter for API calls
+        // Returns the organization value or empty string
+        function getOrganizationValue() {
+            const orgSelector = document.getElementById('organizationSelector');
+            if (orgSelector && orgSelector.value) {
+                return encodeURIComponent(orgSelector.value);
+            }
+            return '';
+        }
+        
+        // Helper function to get organization parameter for API calls
+        // Returns '&organization=...' for URLs with existing query params, or '?organization=...' for URLs without
+        function getOrganizationParam() {
+            const orgValue = getOrganizationValue();
+            if (orgValue) {
+                return '&organization=' + orgValue;
+            }
+            return '';
+        }
+        
+        // Helper function to append organization param to URL (handles both cases)
+        function appendOrgParam(url) {
+            const orgValue = getOrganizationValue();
+            if (orgValue) {
+                const separator = url.includes('?') ? '&' : '?';
+                const finalUrl = url + separator + 'organization=' + orgValue;
+                console.log('API call with organization:', finalUrl); // Debug log
+                return finalUrl;
+            }
+            console.log('API call without organization filter:', url); // Debug log
+            return url;
+        }
+
         // Initialize
         document.addEventListener('DOMContentLoaded', function() {
             setupNavigation();
             loadFilterOptions();
             loadHomeData();
+            
+            // Add organization selector change handler for Dachido admins
+            const orgSelector = document.getElementById('organizationSelector');
+            if (orgSelector) {
+                orgSelector.addEventListener('change', function() {
+                    const selectedOrg = this.value || 'All Organizations';
+                    console.log('Organization changed to:', selectedOrg); // Debug log
+                    
+                    // Reset audio pagination when organization changes
+                    if (audioCurrentPage) {
+                        audioCurrentPage.processed = 0;
+                        audioCurrentPage.pending = 0;
+                        audioCurrentPage.failed = 0;
+                    }
+                    
+                    // Get the currently active module
+                    const activeModule = document.querySelector('.nav-item.active')?.getAttribute('data-module');
+                    
+                    // If audio module is active, reload it immediately with fresh data
+                    if (activeModule === 'audio') {
+                        console.log('Reloading audio module with new organization filter'); // Debug log
+                        // Force reload all audio data
+                        loadAudioOverview(); // Reload overview stats immediately
+                        
+                        // Get the currently active audio tab and reload its data
+                        const activeAudioTab = document.querySelector('.audio-tab-btn.active');
+                        if (activeAudioTab) {
+                            const activeTabName = activeAudioTab.getAttribute('data-audio-tab');
+                            console.log('Reloading active audio tab:', activeTabName); // Debug log
+                            // Reset pagination for the active tab
+                            if (activeTabName === 'processed') {
+                                audioCurrentPage.processed = 0;
+                                loadAudioProcessed(0);
+                            } else if (activeTabName === 'pending') {
+                                audioCurrentPage.pending = 0;
+                                loadAudioPending(0);
+                            } else if (activeTabName === 'failed') {
+                                audioCurrentPage.failed = 0;
+                                loadAudioFailed(0);
+                            } else if (activeTabName === 'language') {
+                                loadAudioLanguageBreakdown();
+                            } else if (activeTabName === 'analytics') {
+                                loadAudioAnalytics();
+                            }
+                        } else {
+                            // No active tab, default to processed
+                            audioCurrentPage.processed = 0;
+                            loadAudioProcessed(0);
+                        }
+                    } else if (activeModule) {
+                        // For other modules, use the standard reload
+                        console.log('Reloading module:', activeModule); // Debug log
+                        loadModuleData(activeModule);
+                    }
+                });
+            }
         });
     </script>
 </body>

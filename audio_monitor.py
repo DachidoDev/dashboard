@@ -55,9 +55,10 @@ class AudioMonitor:
         self.enabled = True
         self.blob_client = Config.get_blob_client()
     
-    def get_pending_recordings(self, limit: int = 100, offset: int = 0) -> Dict:
+    def get_pending_recordings(self, limit: int = 100, offset: int = 0, organization: Optional[str] = None) -> Dict:
         """
         Get all recordings awaiting processing
+        organization: Filter by organization (blobs must be prefixed with {organization}/)
         Returns: List of pending recordings with metadata
         """
         # If not configured, return an empty but successful structure
@@ -67,9 +68,19 @@ class AudioMonitor:
         try:
             container = self.blob_client.get_container_client(Config.RECORDINGS_CONTAINER)
             pending = []
+            
+            # Organization prefix for filtering
+            org_prefix = f"{organization}/" if organization and organization != "dachido" else None
+            
+            # First pass: Count ALL pending recordings (before pagination)
             total = 0
+            all_pending_blobs = []
             
             for blob in container.list_blobs():
+                # Filter by organization prefix if specified
+                if org_prefix and not blob.name.startswith(org_prefix):
+                    continue
+                
                 # Check if it's an audio file
                 if not any(blob.name.endswith(ext) for ext in self.AUDIO_EXTENSIONS):
                     continue
@@ -78,14 +89,15 @@ class AudioMonitor:
                 if self._has_transcription(blob.name):
                     continue
                 
+                # This is a pending recording
                 total += 1
-                
-                # Apply pagination
-                if total <= offset:
-                    continue
-                if len(pending) >= limit:
-                    break
-                
+                all_pending_blobs.append(blob)
+            
+            # Second pass: Apply pagination to get only the records for current page
+            start_idx = offset
+            end_idx = offset + limit
+            
+            for blob in all_pending_blobs[start_idx:end_idx]:
                 pending.append({
                     'filename': blob.name,
                     'size': blob.size,
@@ -96,7 +108,7 @@ class AudioMonitor:
             
             return {
                 'recordings': pending,
-                'total': total,
+                'total': total,  # Total count from first pass (all matching records)
                 'limit': limit,
                 'offset': offset
             }
@@ -109,7 +121,8 @@ class AudioMonitor:
     def get_processed_recordings(self, limit: int = 100, offset: int = 0, 
                                  quality_filter: Optional[str] = None,
                                  language_filter: Optional[str] = None,
-                                 include_transcription: bool = False) -> Dict:
+                                 include_transcription: bool = False,
+                                 organization: Optional[str] = None) -> Dict:
         """
         Get successfully processed recordings with metadata
         include_transcription: If False, skips downloading transcription JSON for better performance
@@ -120,20 +133,27 @@ class AudioMonitor:
         try:
             container = self.blob_client.get_container_client(Config.PROCESSED_CONTAINER)
             processed = []
-            total = 0
             candidates = []  # Store blob names that pass initial filters
             
-            # First pass: collect all audio files and count total (fast, no API calls)
+            # Organization prefix for filtering
+            org_prefix = f"{organization}/" if organization and organization != "dachido" else None
+            
+            # First pass: collect all audio files (fast, no API calls)
             for blob in container.list_blobs():
+                # Filter by organization prefix if specified
+                if org_prefix and not blob.name.startswith(org_prefix):
+                    continue
+                
                 # Check if it's an audio file
                 if not any(blob.name.endswith(ext) for ext in self.AUDIO_EXTENSIONS):
                     continue
                 
                 candidates.append(blob.name)
             
-            # Second pass: get metadata only for blobs we need (after pagination)
-            for idx, blob_name in enumerate(candidates):
-                # Get blob properties and metadata only when needed
+            # Second pass: Apply filters and count total (before pagination)
+            filtered_candidates = []
+            for blob_name in candidates:
+                # Get blob properties and metadata to check filters
                 blob_client = self.blob_client.get_blob_client(Config.PROCESSED_CONTAINER, blob_name)
                 props = blob_client.get_blob_properties()
                 metadata = props.metadata or {}
@@ -146,15 +166,21 @@ class AudioMonitor:
                 if language_filter and metadata.get('source_language') != language_filter:
                     continue
                 
-                total += 1
-                
-                # Apply pagination - skip if before offset
-                if total <= offset:
-                    continue
-                
-                # Stop if we have enough
-                if len(processed) >= limit:
-                    break
+                # This blob passes all filters
+                filtered_candidates.append(blob_name)
+            
+            # Total count is the number of filtered candidates
+            total = len(filtered_candidates)
+            
+            # Third pass: Apply pagination and get full metadata only for current page
+            start_idx = offset
+            end_idx = offset + limit
+            
+            for blob_name in filtered_candidates[start_idx:end_idx]:
+                # Get blob properties and metadata for this specific blob
+                blob_client = self.blob_client.get_blob_client(Config.PROCESSED_CONTAINER, blob_name)
+                props = blob_client.get_blob_properties()
+                metadata = props.metadata or {}
                 
                 # Get transcription data only if requested (lazy loading)
                 transcription_data = None
@@ -234,7 +260,7 @@ class AudioMonitor:
             traceback.print_exc()
             return {'recordings': [], 'total': 0, 'error': str(e)}
     
-    def get_failed_recordings(self, limit: int = 100, offset: int = 0) -> Dict:
+    def get_failed_recordings(self, limit: int = 100, offset: int = 0, organization: Optional[str] = None) -> Dict:
         """
         Get failed recordings with error information
         """
@@ -244,21 +270,33 @@ class AudioMonitor:
         try:
             container = self.blob_client.get_container_client(Config.FAILED_CONTAINER)
             failed = []
-            total = 0
+            
+            # Organization prefix for filtering
+            org_prefix = f"{organization}/" if organization and organization != "dachido" else None
+            
+            # First pass: Count ALL failed recordings (before pagination)
+            all_failed_blobs = []
             
             for blob in container.list_blobs():
+                # Filter by organization prefix if specified
+                if org_prefix and not blob.name.startswith(org_prefix):
+                    continue
+                
                 # Check if it's an audio file
                 if not any(blob.name.endswith(ext) for ext in self.AUDIO_EXTENSIONS):
                     continue
                 
-                total += 1
-                
-                # Apply pagination
-                if total <= offset:
-                    continue
-                if len(failed) >= limit:
-                    break
-                
+                # This is a failed recording
+                all_failed_blobs.append(blob)
+            
+            # Total count is the number of all failed blobs
+            total = len(all_failed_blobs)
+            
+            # Second pass: Apply pagination to get only the records for current page
+            start_idx = offset
+            end_idx = offset + limit
+            
+            for blob in all_failed_blobs[start_idx:end_idx]:
                 # Get error metadata
                 error_data = self._get_error_metadata(blob.name)
                 
@@ -276,7 +314,7 @@ class AudioMonitor:
             
             return {
                 'recordings': failed,
-                'total': total,
+                'total': total,  # Total count from first pass (all matching records)
                 'limit': limit,
                 'offset': offset
             }
@@ -779,16 +817,62 @@ class AudioMonitor:
                 return part.split('=', 1)[1]
         return ''
     
-    def get_overview_stats(self) -> Dict:
+    def get_organizations_from_containers(self) -> List[str]:
+        """
+        Discover organizations by scanning blob names in all containers
+        Returns list of organization names found in containers
+        """
+        if not getattr(self, 'enabled', False) or not self.blob_client:
+            return []
+        
+        organizations = set()
+        
+        try:
+            # Check all containers for organization prefixes
+            containers_to_check = [
+                Config.RECORDINGS_CONTAINER,
+                Config.PROCESSED_CONTAINER,
+                Config.FAILED_CONTAINER
+            ]
+            
+            for container_name in containers_to_check:
+                try:
+                    container = self.blob_client.get_container_client(container_name)
+                    for blob in container.list_blobs():
+                        # Extract organization from blob name
+                        # Format: {organization}/{filename}
+                        if '/' in blob.name:
+                            org_name = blob.name.split('/')[0]
+                            # Only add if it's not empty and not a system prefix
+                            if org_name and org_name not in ['dachido', 'system', 'temp']:
+                                organizations.add(org_name)
+                except Exception as e:
+                    print(f"Error scanning container {container_name}: {e}")
+                    continue
+            
+            # Return sorted list
+            return sorted(list(organizations))
+        except Exception as e:
+            print(f"Error discovering organizations: {e}")
+            return []
+    
+    def get_overview_stats(self, organization: Optional[str] = None) -> Dict:
         """Get quick overview statistics - optimized for speed"""
         try:
             pending_container = self.blob_client.get_container_client(Config.RECORDINGS_CONTAINER)
             processed_container = self.blob_client.get_container_client(Config.PROCESSED_CONTAINER)
             failed_container = self.blob_client.get_container_client(Config.FAILED_CONTAINER)
             
+            # Organization prefix for filtering
+            org_prefix = f"{organization}/" if organization and organization != "dachido" else None
+            
             # Count audio files efficiently (just check extensions, no API calls per file)
             pending_count = 0
             for b in pending_container.list_blobs():
+                # Filter by organization prefix if specified
+                if org_prefix and not b.name.startswith(org_prefix):
+                    continue
+                
                 if any(b.name.endswith(ext) for ext in self.AUDIO_EXTENSIONS):
                     # Quick check if transcription exists (for pending, we want files WITHOUT transcription)
                     transcription_name = b.name.rsplit('.', 1)[0] + '_transcription.json'
@@ -803,9 +887,11 @@ class AudioMonitor:
                         pending_count += 1  # No transcription, count as pending
             
             processed_count = sum(1 for b in processed_container.list_blobs() 
-                                if any(b.name.endswith(ext) for ext in self.AUDIO_EXTENSIONS))
+                                if (not org_prefix or b.name.startswith(org_prefix))
+                                and any(b.name.endswith(ext) for ext in self.AUDIO_EXTENSIONS))
             failed_count = sum(1 for b in failed_container.list_blobs() 
-                             if any(b.name.endswith(ext) for ext in self.AUDIO_EXTENSIONS))
+                             if (not org_prefix or b.name.startswith(org_prefix))
+                             and any(b.name.endswith(ext) for ext in self.AUDIO_EXTENSIONS))
             
             return {
                 'pending': pending_count,

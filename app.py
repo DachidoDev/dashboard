@@ -31,7 +31,7 @@ except ImportError as e:
 # try to solve Azure issue
 from urllib.parse import urlencode
 
-from flask import Flask, jsonify, redirect, render_template, request, session, url_for
+from flask import Flask, jsonify, redirect, render_template, request, session, url_for, make_response, g
 from flask_bcrypt import Bcrypt
 
 app = Flask(__name__)
@@ -42,16 +42,11 @@ def favicon():
 app.config["SECRET_KEY"] = os.environ.get("SECRET_KEY", "your_super_secret_key")
 bcrypt = Bcrypt(app)
 
+# Initialize auth module
+auth.init_auth(app)
 
-#######################################################
-def login_required(f):
-    @wraps(f)
-    def decorated_function(*args, **kwargs):
-        if "logged_in" not in session:
-            return redirect(url_for("login"))
-        return f(*args, **kwargs)
-
-    return decorated_function
+# Import login_required decorator from auth module
+from auth import login_required
 
 
 #######################################################
@@ -177,12 +172,84 @@ def get_crop_type_options():
 # ==================== HOME MODULE APIs ====================
 
 
+@app.route("/api/organizations")
+@login_required
+def get_organizations():
+    """
+    Get list of organizations that have data in containers
+    Only returns organizations found in Azure Blob Storage containers
+    """
+    if not g.is_dachido_admin:
+        return jsonify({"error": "Unauthorized"}), 403
+    
+    try:
+        organizations = []
+        
+        if AUDIO_MONITOR_ENABLED:
+            try:
+                monitor = AudioMonitor()
+                # Discover organizations from blob containers (only orgs with actual data)
+                org_names_from_containers = monitor.get_organizations_from_containers()
+                
+                # Get display names from organizations.json if available
+                orgs_data = auth.load_organizations()
+                
+                for org_name in org_names_from_containers:
+                    org_info = orgs_data.get(org_name)
+                    display_name = org_info.get("display_name", org_name.title()) if org_info else org_name.title()
+                    organizations.append({
+                        "name": org_name,
+                        "display_name": display_name,
+                        "created_at": org_info.get("created_at") if org_info else None
+                    })
+                
+                # Sort by display name
+                organizations.sort(key=lambda x: x["display_name"])
+            except Exception as e:
+                print(f"Error getting organizations from containers: {e}")
+                # Fallback to organizations.json if container scan fails
+                orgs_data = auth.load_organizations()
+                organizations = [
+                    {
+                        "name": org_name,
+                        "display_name": org_data.get("display_name", org_name.title()),
+                        "created_at": org_data.get("created_at")
+                    }
+                    for org_name, org_data in orgs_data.items()
+                    if org_name != "dachido"
+                ]
+                organizations.sort(key=lambda x: x["display_name"])
+        else:
+            # Fallback if audio monitor not enabled
+            orgs_data = auth.load_organizations()
+            organizations = [
+                {
+                    "name": org_name,
+                    "display_name": org_data.get("display_name", org_name.title()),
+                    "created_at": org_data.get("created_at")
+                }
+                for org_name, org_data in orgs_data.items()
+                if org_name != "dachido"
+            ]
+            organizations.sort(key=lambda x: x["display_name"])
+        
+        return jsonify({"organizations": organizations})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
 @app.route("/api/home/kpis")
 @login_required
 def get_home_kpis():
     conn = get_db_connection()
     date_filter = request.args.get("date", "30")
     crop_filter = request.args.get("crop", "all")
+    
+    # Dachido admins can view any organization's data via query parameter
+    # Note: Currently SQLite doesn't filter by organization, but this is ready for PostgreSQL
+    view_organization = None
+    if g.is_dachido_admin:
+        view_organization = request.args.get("organization")
 
     try:
         start_date, end_date = parse_date_filter(date_filter)
@@ -994,6 +1061,7 @@ def get_problem_trend():
 
 
 @app.route("/api/operations/problem-sentiment")
+@login_required
 def get_problem_sentiment():
     conn = get_db_connection()
 
@@ -1042,6 +1110,7 @@ def get_problem_sentiment():
 
 
 @app.route("/api/operations/crop-keywords")
+@login_required
 def get_crop_keywords():
     conn = get_db_connection()
 
@@ -1087,6 +1156,7 @@ def get_crop_keywords():
 
 
 @app.route("/api/operations/solution-flow")
+@login_required
 def get_solution_flow():
     conn = get_db_connection()
 
@@ -1110,6 +1180,7 @@ def get_solution_flow():
 
 
 @app.route("/api/operations/solution-effectiveness")
+@login_required
 def get_solution_effectiveness():
     conn = get_db_connection()
 
@@ -1139,6 +1210,7 @@ def get_solution_effectiveness():
 
 
 @app.route("/api/operations/solution-sentiment")
+@login_required
 def get_solution_sentiment():
     conn = get_db_connection()
     date_filter = request.args.get("date", "30")
@@ -1188,6 +1260,7 @@ def get_solution_sentiment():
 
 
 @app.route("/api/operations/sentiment-by-crop")
+@login_required
 def get_sentiment_by_crop():
     conn = get_db_connection()
 
@@ -1238,6 +1311,7 @@ def get_sentiment_by_crop():
 
 
 @app.route("/api/engagement/conv-by-region")
+@login_required
 def get_conv_by_region():
     conn = get_db_connection()
 
@@ -1266,6 +1340,7 @@ def get_conv_by_region():
 
 
 @app.route("/api/engagement/team-urgency")
+@login_required
 def get_team_urgency():
     conn = get_db_connection()
 
@@ -1291,6 +1366,7 @@ def get_team_urgency():
 
 
 @app.route("/api/engagement/team-intent")
+@login_required
 def get_team_intent():
     conn = get_db_connection()
 
@@ -1318,6 +1394,7 @@ def get_team_intent():
 
 
 @app.route("/api/engagement/quality-by-region")
+@login_required
 def get_quality_by_region():
     conn = get_db_connection()
 
@@ -1368,6 +1445,7 @@ def get_quality_by_region():
 
 
 @app.route("/api/engagement/agent-scorecard")
+@login_required
 def get_agent_scorecard():
     conn = get_db_connection()
 
@@ -1765,30 +1843,57 @@ def debug_companies():
 @app.route("/login", methods=["GET", "POST"])
 def login():
     if request.method == "POST":
-        username = request.form["username"]
-        password = request.form["password"]
-        success, role = auth.check_password(username, password)
+        organization = request.form.get("organization", "").strip().lower()
+        username = request.form.get("username", "").strip()
+        password = request.form.get("password", "")
+        
+        if not organization or not username or not password:
+            return render_template("login.html", error="Organization, username, and password are required")
+        
+        success, role, org = auth.check_password(organization, username, password)
         if success:
-            session["logged_in"] = True
-            session["username"] = username
-            session["user_role"] = role
-            return redirect(url_for("index"))
+            # Generate JWT token
+            token = auth.generate_jwt_token(username, org, role)
+            
+            # Create response with redirect
+            response = make_response(redirect(url_for("index")))
+            
+            # Set JWT token as HTTP-only cookie (30 minutes expiration)
+            response.set_cookie(
+                "auth_token",
+                token,
+                max_age=30 * 60,  # 30 minutes in seconds
+                httponly=True,
+                secure=os.environ.get("FLASK_ENV") == "production",  # HTTPS in production
+                samesite="Lax"
+            )
+            
+            return response
         else:
-            return render_template("login.html", error="Invalid Credentials")
+            return render_template("login.html", error="Invalid Organization, Username, or Password")
     return render_template("login.html")
 
 
 @app.route("/register", methods=["GET", "POST"])
 def register():
+    """Registration route - only for Dachido admins to create new users"""
     if request.method == "POST":
-        username = request.form["username"]
-        password = request.form["password"]
-        # Get role from form, default to customer_admin
+        organization = request.form.get("organization", "").strip().lower()
+        username = request.form.get("username", "").strip()
+        password = request.form.get("password", "")
         role = request.form.get("role", "customer_admin")
-        # Only allow admin/customer_admin roles
+        
+        if not organization or not username or not password:
+            return render_template("register.html", error="Organization, username, and password are required")
+        
+        # Only allow admin/customer_admin roles (dachido_admin must be created manually)
         if role not in ["admin", "customer_admin"]:
             role = "customer_admin"
-        if auth.add_user(username, password, role):
+        
+        # Create organization if it doesn't exist
+        auth.add_organization(organization)
+        
+        if auth.add_user(organization, username, password, role):
             return redirect(url_for("login"))
         else:
             return render_template("register.html", error="User already exists")
@@ -1797,9 +1902,10 @@ def register():
 
 @app.route("/logout")
 def logout():
-    session.pop("logged_in", None)
-    session.pop("username", None)
-    return redirect(url_for("login"))
+    """Logout by clearing JWT cookie"""
+    response = make_response(redirect(url_for("login")))
+    response.set_cookie("auth_token", "", expires=0)
+    return response
 
 
 # ==================== MAIN ROUTE ====================
@@ -1808,8 +1914,88 @@ def logout():
 @app.route("/")
 @login_required
 def index():
-    user_role = session.get("user_role", "customer_admin")
-    return render_template("dashboard.html", user_role=user_role)
+    """Main dashboard route - routes to organization or Dachido dashboard"""
+    organization = g.organization
+    role = g.role
+    username = g.username
+    is_dachido_admin = g.is_dachido_admin
+    
+    # Get organization display name
+    org_info = auth.get_organization(organization)
+    org_display_name = org_info.get("display_name", organization.title()) if org_info else organization.title()
+    
+    # Get all organizations for Dachido admin selector
+    # For Dachido admins: Get organizations from containers (only show orgs with data)
+    all_organizations = []
+    if is_dachido_admin:
+        if AUDIO_MONITOR_ENABLED:
+            try:
+                monitor = AudioMonitor()
+                # Discover organizations from blob containers
+                org_names_from_containers = monitor.get_organizations_from_containers()
+                
+                # Get display names from organizations.json if available
+                orgs_data = auth.load_organizations()
+                
+                for org_name in org_names_from_containers:
+                    org_info = orgs_data.get(org_name)
+                    display_name = org_info.get("display_name", org_name.title()) if org_info else org_name.title()
+                    all_organizations.append({
+                        "name": org_name,
+                        "display_name": display_name
+                    })
+                
+                # Sort by display name
+                all_organizations.sort(key=lambda x: x["display_name"])
+            except Exception as e:
+                print(f"Error getting organizations from containers: {e}")
+                # Fallback to organizations.json if container scan fails
+                orgs_data = auth.load_organizations()
+                all_organizations = [
+                    {
+                        "name": org_name,
+                        "display_name": org_data.get("display_name", org_name.title())
+                    }
+                    for org_name, org_data in orgs_data.items()
+                    if org_name != "dachido"
+                ]
+                all_organizations.sort(key=lambda x: x["display_name"])
+        else:
+            # Fallback if audio monitor not enabled
+            orgs_data = auth.load_organizations()
+            all_organizations = [
+                {
+                    "name": org_name,
+                    "display_name": org_data.get("display_name", org_name.title())
+                }
+                for org_name, org_data in orgs_data.items()
+                if org_name != "dachido"
+            ]
+            all_organizations.sort(key=lambda x: x["display_name"])
+    
+    # Route to appropriate dashboard
+    if is_dachido_admin:
+        # Dachido admin sees Dachido dashboard with organization selector
+        return render_template(
+            "dashboard.html",
+            user_role=role,
+            organization=organization,
+            organization_display_name="Dachido",
+            username=username,
+            is_dachido_admin=True,
+            all_organizations=all_organizations
+        )
+    else:
+        # Organization users see their organization dashboard
+        return render_template(
+            "dashboard.html",
+            user_role=role,
+            organization=organization,
+            organization_display_name=org_display_name,
+            username=username,
+            is_dachido_admin=False,
+            all_organizations=[]
+        )
 
 
 ################################################
@@ -1822,8 +2008,16 @@ def get_audio_overview():
     if not AUDIO_MONITOR_ENABLED:
         return jsonify({"error": "Audio monitoring not enabled", "pending": 0, "processed": 0, "failed": 0}), 503
     try:
+        # Dachido admins can view any organization's data via query parameter
+        if g.is_dachido_admin:
+            view_org = request.args.get("organization")
+            # Empty string or None means all organizations
+            organization = view_org if view_org and view_org.strip() else None
+        else:
+            organization = g.organization
+        
         monitor = AudioMonitor()
-        stats = monitor.get_overview_stats()
+        stats = monitor.get_overview_stats(organization=organization)
         return jsonify(stats)
     except Exception as e:
         print(f"Audio overview error: {e}")
@@ -1835,10 +2029,18 @@ def get_audio_pending():
     if not AUDIO_MONITOR_ENABLED:
         return jsonify({"error": "Audio monitoring not enabled"}), 503
     try:
+        # Dachido admins can view any organization's data via query parameter
+        if g.is_dachido_admin:
+            view_org = request.args.get("organization")
+            # Empty string or None means all organizations
+            organization = view_org if view_org and view_org.strip() else None
+        else:
+            organization = g.organization
+        
         limit = int(request.args.get("limit", 50))
         offset = int(request.args.get("offset", 0))
         monitor = AudioMonitor()
-        result = monitor.get_pending_recordings(limit=limit, offset=offset)
+        result = monitor.get_pending_recordings(limit=limit, offset=offset, organization=organization)
         return jsonify(result)
     except Exception as e:
         return jsonify({"error": str(e)}), 500
@@ -1849,6 +2051,14 @@ def get_audio_processed():
     if not AUDIO_MONITOR_ENABLED:
         return jsonify({"error": "Audio monitoring not enabled"}), 503
     try:
+        # Dachido admins can view any organization's data via query parameter
+        if g.is_dachido_admin:
+            view_org = request.args.get("organization")
+            # Empty string or None means all organizations
+            organization = view_org if view_org and view_org.strip() else None
+        else:
+            organization = g.organization
+        
         limit = int(request.args.get("limit", 50))
         offset = int(request.args.get("offset", 0))
         quality_filter = request.args.get("quality")
@@ -1861,11 +2071,12 @@ def get_audio_processed():
             limit=limit, offset=offset,
             quality_filter=quality_filter,
             language_filter=language_filter,
-            include_transcription=include_transcription
+            include_transcription=include_transcription,
+            organization=organization
         )
         
         # Hide translations for customer_admin
-        user_role = session.get("user_role", "customer_admin")
+        user_role = g.role
         if user_role == "customer_admin":
             for recording in result.get("recordings", []):
                 # Remove translation but keep transcription
@@ -1885,10 +2096,18 @@ def get_audio_failed():
     if not AUDIO_MONITOR_ENABLED:
         return jsonify({"error": "Audio monitoring not enabled"}), 503
     try:
+        # Dachido admins can view any organization's data via query parameter
+        if g.is_dachido_admin:
+            view_org = request.args.get("organization")
+            # Empty string or None means all organizations
+            organization = view_org if view_org and view_org.strip() else None
+        else:
+            organization = g.organization
+        
         limit = int(request.args.get("limit", 50))
         offset = int(request.args.get("offset", 0))
         monitor = AudioMonitor()
-        result = monitor.get_failed_recordings(limit=limit, offset=offset)
+        result = monitor.get_failed_recordings(limit=limit, offset=offset, organization=organization)
         return jsonify(result)
     except Exception as e:
         return jsonify({"error": str(e)}), 500
@@ -1917,7 +2136,7 @@ def get_audio_recording_detail(filename):
         detail = monitor.get_recording_detail(filename, container=container)
         
         # Hide translations for customer_admin
-        user_role = session.get("user_role", "customer_admin")
+        user_role = g.role
         if user_role == "customer_admin":
             # Remove translation from transcription data
             if detail.get("transcription"):
@@ -1941,7 +2160,7 @@ def update_audio_quality_feedback():
         filename = data.get("filename")
         rating = data.get("rating")
         notes = data.get("notes", "")
-        reviewer = session.get("username", "admin")
+        reviewer = g.username or "admin"
         
         if not filename or not rating:
             return jsonify({"error": "filename and rating are required"}), 400
@@ -1974,6 +2193,14 @@ def get_audio_language_breakdown():
     if not AUDIO_MONITOR_ENABLED:
         return jsonify({"error": "Audio monitoring not enabled"}), 503
     try:
+        # Dachido admins can view any organization's data via query parameter
+        if g.is_dachido_admin:
+            view_org = request.args.get("organization")
+            # Empty string or None means all organizations
+            organization = view_org if view_org and view_org.strip() else None
+        else:
+            organization = g.organization
+        
         monitor = AudioMonitor()
         
         # Use optimized method - get metadata only, no transcription downloads
@@ -1989,7 +2216,8 @@ def get_audio_language_breakdown():
             processed_result = monitor.get_processed_recordings(
                 limit=batch_size, 
                 offset=offset,
-                include_transcription=False  # Don't download transcription JSON
+                include_transcription=False,  # Don't download transcription JSON
+                organization=organization
             )
             recordings = processed_result.get("recordings", [])
             
@@ -2046,10 +2274,26 @@ def get_audio_language_breakdown():
 ################################################
 
 if __name__ == "__main__":
+    # Initialize default organizations and users
+    # Create Dachido organization
+    auth.add_organization("dachido", display_name="Dachido")
+    
+    # Create a sample organization (Coromandel)
+    auth.add_organization("coromandel", display_name="Coromandel")
+    
     # Initialize default users if they don't exist
     existing_users = auth.load_users()
-    if "admin" not in existing_users:
-        auth.add_user("admin", "adminpass", role="admin")
-    if "customer" not in existing_users:
-        auth.add_user("customer", "customer123", role="customer_admin")
+    
+    # Create Dachido admin user
+    if "dachido:admin" not in existing_users:
+        auth.add_user("dachido", "admin", "adminpass", role="dachido_admin")
+    
+    # Create sample organization admin
+    if "coromandel:admin" not in existing_users:
+        auth.add_user("coromandel", "admin", "adminpass", role="admin")
+    
+    # Create sample organization customer
+    if "coromandel:customer" not in existing_users:
+        auth.add_user("coromandel", "customer", "customer123", role="customer_admin")
+    
     app.run(debug=True, host="0.0.0.0", port=5000)

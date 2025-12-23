@@ -7,5 +7,26 @@
     "customer": {
         "password": "$2b$12$J.l6D4CqIoxz9IA/C4SIqO.XcQcKFX5R.S52/dsa01vseG42glIom",
         "role": "customer_admin"
+    },
+    "dachido:admin": {
+        "password": "$2b$12$MGg4XmhRX7g3UKuU072YZODcFGFB8GvpUGLfvyCJp3DELe7NIvOBi",
+        "role": "dachido_admin",
+        "organization": "dachido",
+        "username": "admin",
+        "created_at": "2025-12-22T15:55:52.367605"
+    },
+    "coromandel:admin": {
+        "password": "$2b$12$r9eA2aWnoGNrC1EZOL3ePeWBePa6arlBE5oK9u.9hA/baMXJEPQM.",
+        "role": "admin",
+        "organization": "coromandel",
+        "username": "admin",
+        "created_at": "2025-12-22T15:55:52.791722"
+    },
+    "coromandel:customer": {
+        "password": "$2b$12$u2Hk.2qsw3QF/sjbXPIAvuqqMWbvGwyRdDS5.jHWoRIQTYMb44KFW",
+        "role": "customer_admin",
+        "organization": "coromandel",
+        "username": "customer",
+        "created_at": "2025-12-22T15:55:53.321932"
     }
 }

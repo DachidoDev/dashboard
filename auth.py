@@ -1,17 +1,35 @@
+"""
+Multi-tenant authentication module with JWT support
+Supports organization-based user management and Dachido admin access
+"""
 import json
 import os
-from flask import session, redirect, url_for, Blueprint, request, render_template
+import jwt
+from datetime import datetime, timedelta
+from functools import wraps
+from flask import request, g, redirect, url_for
 from flask_bcrypt import Bcrypt
 
 # Bcrypt will be initialized by the Flask app
 bcrypt = Bcrypt()
 
 USERS_FILE = "users.json"
+ORGANIZATIONS_FILE = "organizations.json"
 if os.environ.get("WEBSITE_INSTANCE_ID"):  # Running on Azure
     USERS_FILE = "/home/site/data/users.json"
+    ORGANIZATIONS_FILE = "/home/site/data/organizations.json"
+
+# JWT Configuration
+JWT_SECRET_KEY = os.environ.get("JWT_SECRET_KEY", "your_super_secret_jwt_key_change_in_production")
+JWT_ALGORITHM = "HS256"
+JWT_EXPIRATION_MINUTES = 30
+
+# Special organization for super admins
+DACHIDO_ORG = "dachido"
 
 
 def load_users():
+    """Load users from JSON file"""
     if not os.path.exists(USERS_FILE):
         with open(USERS_FILE, "w") as f:
             json.dump({}, f)
@@ -20,65 +38,207 @@ def load_users():
 
 
 def save_users(users):
+    """Save users to JSON file"""
     with open(USERS_FILE, "w") as f:
         json.dump(users, f, indent=4)
 
 
-def add_user(username, password, role="customer_admin"):
+def load_organizations():
+    """Load organizations from JSON file"""
+    if not os.path.exists(ORGANIZATIONS_FILE):
+        with open(ORGANIZATIONS_FILE, "w") as f:
+            json.dump({}, f)
+    with open(ORGANIZATIONS_FILE, "r") as f:
+        return json.load(f)
+
+
+def save_organizations(organizations):
+    """Save organizations to JSON file"""
+    with open(ORGANIZATIONS_FILE, "w") as f:
+        json.dump(organizations, f, indent=4)
+
+
+def add_organization(org_name, display_name=None, metadata=None):
     """
-    Add a new user with a specified role
-    role can be: 'admin' or 'customer_admin'
+    Add a new organization
+    Returns True if added, False if already exists
+    """
+    organizations = load_organizations()
+    if org_name in organizations:
+        return False
+    
+    organizations[org_name] = {
+        "display_name": display_name or org_name.title(),
+        "created_at": datetime.now().isoformat(),
+        "metadata": metadata or {}
+    }
+    save_organizations(organizations)
+    return True
+
+
+def get_organization(org_name):
+    """Get organization information"""
+    organizations = load_organizations()
+    return organizations.get(org_name)
+
+
+def add_user(organization, username, password, role="customer_admin"):
+    """
+    Add a new user with organization and role
+    role can be: 'dachido_admin', 'admin', or 'customer_admin'
     """
     users = load_users()
-    if username in users:
+    user_key = f"{organization}:{username}"
+    
+    if user_key in users:
         return False  # User already exists
+    
     hashed_password = bcrypt.generate_password_hash(password).decode("utf-8")
-    users[username] = {
+    users[user_key] = {
         "password": hashed_password,
-        "role": role
+        "role": role,
+        "organization": organization,
+        "username": username,
+        "created_at": datetime.now().isoformat()
     }
     save_users(users)
     return True
 
 
-def check_password(username, password):
+def check_password(organization, username, password):
     """
-    Check password and return (success, role) tuple
-    Handles both old format (string) and new format (dict with password and role)
+    Check password and return (success, role, organization) tuple
     """
     users = load_users()
-    if username not in users:
-        return False, None
+    user_key = f"{organization}:{username}"
     
-    user_data = users[username]
+    if user_key not in users:
+        return False, None, None
+    
+    user_data = users[user_key]
     
     # Handle old format (backward compatibility)
     if isinstance(user_data, str):
         # Old format: just the hashed password string
         if bcrypt.check_password_hash(user_data, password):
-            # Assume old users are admins, but migrate to new format
-            users[username] = {"password": user_data, "role": "admin"}
+            # Migrate to new format - assume admin role for old users
+            users[user_key] = {
+                "password": user_data,
+                "role": "admin",
+                "organization": organization,
+                "username": username,
+                "created_at": datetime.now().isoformat()
+            }
             save_users(users)
-            return True, "admin"
-        return False, None
+            return True, "admin", organization
+        return False, None, None
     
     # New format: dict with password and role
     if bcrypt.check_password_hash(user_data["password"], password):
-        return True, user_data.get("role", "customer_admin")
-    return False, None
+        role = user_data.get("role", "customer_admin")
+        org = user_data.get("organization", organization)
+        return True, role, org
+    
+    return False, None, None
 
 
-def get_user_role(username):
+def generate_jwt_token(username, organization, role):
+    """
+    Generate JWT token with user information
+    Token expires in 30 minutes
+    """
+    expiration = datetime.utcnow() + timedelta(minutes=JWT_EXPIRATION_MINUTES)
+    
+    payload = {
+        "username": username,
+        "organization": organization,
+        "role": role,
+        "exp": expiration,
+        "iat": datetime.utcnow()
+    }
+    
+    token = jwt.encode(payload, JWT_SECRET_KEY, algorithm=JWT_ALGORITHM)
+    # jwt.encode returns a string in PyJWT 2.x, but ensure it's a string
+    if isinstance(token, bytes):
+        return token.decode('utf-8')
+    return token
+
+
+def verify_jwt_token(token):
+    """
+    Verify and decode JWT token
+    Returns (success, payload) tuple
+    """
+    try:
+        payload = jwt.decode(token, JWT_SECRET_KEY, algorithms=[JWT_ALGORITHM])
+        return True, payload
+    except jwt.ExpiredSignatureError:
+        return False, {"error": "Token expired"}
+    except jwt.InvalidTokenError:
+        return False, {"error": "Invalid token"}
+
+
+def get_user_from_token():
+    """
+    Extract user information from JWT token in cookie
+    Returns (username, organization, role) or (None, None, None) if invalid
+    """
+    token = request.cookies.get("auth_token")
+    if not token:
+        return None, None, None
+    
+    success, payload = verify_jwt_token(token)
+    if not success:
+        return None, None, None
+    
+    return payload.get("username"), payload.get("organization"), payload.get("role")
+
+
+def is_dachido_admin(organization, role):
+    """Check if user is a Dachido admin"""
+    return organization == DACHIDO_ORG and role == "dachido_admin"
+
+
+def login_required(f):
+    """
+    Decorator to protect routes requiring authentication
+    Validates JWT token and populates g object with user info
+    """
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        username, organization, role = get_user_from_token()
+        
+        if not username or not organization:
+            return redirect(url_for("login"))
+        
+        # Store user info in Flask's g object for use in the request
+        g.username = username
+        g.organization = organization
+        g.role = role
+        g.is_dachido_admin = is_dachido_admin(organization, role)
+        
+        return f(*args, **kwargs)
+    
+    return decorated_function
+
+
+def get_user_role(organization, username):
     """Get the role of a user"""
     users = load_users()
-    if username not in users:
+    user_key = f"{organization}:{username}"
+    
+    if user_key not in users:
         return None
     
-    user_data = users[username]
+    user_data = users[user_key]
     if isinstance(user_data, str):
         return "admin"  # Default for old format
     return user_data.get("role", "customer_admin")
 
 
 def init_auth(app):
+    """Initialize authentication with Flask app"""
     bcrypt.init_app(app)
+    # Set JWT secret key from app config if available
+    global JWT_SECRET_KEY
+    JWT_SECRET_KEY = app.config.get("SECRET_KEY", JWT_SECRET_KEY)
