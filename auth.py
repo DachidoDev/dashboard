@@ -30,6 +30,11 @@ DACHIDO_ORG = "dachido"
 
 def load_users():
     """Load users from JSON file"""
+    # Ensure directory exists (for Azure deployment)
+    users_dir = os.path.dirname(USERS_FILE)
+    if users_dir and not os.path.exists(users_dir):
+        os.makedirs(users_dir, exist_ok=True)
+    
     if not os.path.exists(USERS_FILE):
         with open(USERS_FILE, "w") as f:
             json.dump({}, f)
@@ -45,6 +50,11 @@ def save_users(users):
 
 def load_organizations():
     """Load organizations from JSON file"""
+    # Ensure directory exists (for Azure deployment)
+    orgs_dir = os.path.dirname(ORGANIZATIONS_FILE)
+    if orgs_dir and not os.path.exists(orgs_dir):
+        os.makedirs(orgs_dir, exist_ok=True)
+    
     if not os.path.exists(ORGANIZATIONS_FILE):
         with open(ORGANIZATIONS_FILE, "w") as f:
             json.dump({}, f)

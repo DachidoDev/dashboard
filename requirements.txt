@@ -16,6 +16,5 @@ python-dotenv
 # Production server
 gunicorn
 
-# Core Flask dependencies
-python-dotenv
+# Azure Identity (optional, for managed identity)
 azure-identity

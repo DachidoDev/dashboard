@@ -54,6 +54,10 @@ from auth import login_required
 # Determine database path once at module load time
 if os.environ.get("WEBSITE_INSTANCE_ID"):  # Running on Azure
     DB_PATH = "/home/site/data/fieldforce.db"
+    # Ensure directory exists
+    db_dir = os.path.dirname(DB_PATH)
+    if not os.path.exists(db_dir):
+        os.makedirs(db_dir, exist_ok=True)
 else:
     DB_PATH = "fieldforce.db"
 
@@ -62,6 +66,11 @@ COROMANDEL_COMPANY_CODE = 7007
 
 def get_db_connection():
     """Get database connection using the configured DB_PATH"""
+    # Ensure directory exists before connecting
+    db_dir = os.path.dirname(DB_PATH)
+    if db_dir and not os.path.exists(db_dir):
+        os.makedirs(db_dir, exist_ok=True)
+    
     _db_connection = sqlite3.connect(DB_PATH)
     _db_connection.row_factory = sqlite3.Row
     return _db_connection
@@ -2284,8 +2293,9 @@ def get_audio_language_breakdown():
 
 ################################################
 
-if __name__ == "__main__":
-    # Initialize default organizations and users
+# Initialize default organizations and users on app startup
+# This runs when the module is imported, ensuring data directories exist
+try:
     # Create Dachido organization
     auth.add_organization("dachido", display_name="Dachido")
     
@@ -2306,5 +2316,9 @@ if __name__ == "__main__":
     # Create sample organization customer
     if "coromandel:customer" not in existing_users:
         auth.add_user("coromandel", "customer", "customer123", role="customer_admin")
-    
+except Exception as e:
+    # Log error but don't crash the app
+    print(f"⚠️  Warning: Could not initialize default users/organizations: {e}")
+
+if __name__ == "__main__":
     app.run(debug=True, host="0.0.0.0", port=5000)
