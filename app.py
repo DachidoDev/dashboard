@@ -51,15 +51,17 @@ from auth import login_required
 
 #######################################################
 # Database configuration
-DB_PATH = "fieldforce.db"
+# Determine database path once at module load time
+if os.environ.get("WEBSITE_INSTANCE_ID"):  # Running on Azure
+    DB_PATH = "/home/site/data/fieldforce.db"
+else:
+    DB_PATH = "fieldforce.db"
+
 COROMANDEL_COMPANY_CODE = 7007
 
 
 def get_db_connection():
-    global DB_PATH
-    if os.environ.get("WEBSITE_INSTANCE_ID"):  # Running on Azure
-        # DB_PATH = "/mnt/data/" + DB_PATH
-        DB_PATH = "/home/site/data/fieldforce.db"
+    """Get database connection using the configured DB_PATH"""
     _db_connection = sqlite3.connect(DB_PATH)
     _db_connection.row_factory = sqlite3.Row
     return _db_connection
@@ -2119,8 +2121,17 @@ def get_audio_analytics():
         return jsonify({"error": "Audio monitoring not enabled"}), 503
     try:
         days = int(request.args.get("days", 30))
+        
+        # Dachido admins can view any organization's data via query parameter
+        if g.is_dachido_admin:
+            view_org = request.args.get("organization")
+            # Empty string or None means all organizations
+            organization = view_org if view_org and view_org.strip() else None
+        else:
+            organization = g.organization
+        
         monitor = AudioMonitor()
-        analytics = monitor.get_analytics(days=days)
+        analytics = monitor.get_analytics(days=days, organization=organization)
         return jsonify(analytics)
     except Exception as e:
         return jsonify({"error": str(e)}), 500

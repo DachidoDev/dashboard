@@ -462,9 +462,10 @@ class AudioMonitor:
             traceback.print_exc()
             return {'success': False, 'error': str(e)}
     
-    def get_analytics(self, days: int = 30) -> Dict:
+    def get_analytics(self, days: int = 30, organization: Optional[str] = None) -> Dict:
         """
         Calculate analytics and metrics for the dashboard
+        organization: Filter by organization (blobs must be prefixed with {organization}/)
         """
         if not getattr(self, 'enabled', False) or not self.blob_client:
             return {
@@ -486,6 +487,9 @@ class AudioMonitor:
         try:
             cutoff_date = datetime.now() - timedelta(days=days)
             
+            # Organization prefix for filtering
+            org_prefix = f"{organization}/" if organization and organization != "dachido" else None
+            
             # Collect data from processed recordings
             processed_container = self.blob_client.get_container_client(Config.PROCESSED_CONTAINER)
             failed_container = self.blob_client.get_container_client(Config.FAILED_CONTAINER)
@@ -495,6 +499,10 @@ class AudioMonitor:
             
             # Get processed recordings data
             for blob in processed_container.list_blobs():
+                # Filter by organization prefix if specified
+                if org_prefix and not blob.name.startswith(org_prefix):
+                    continue
+                
                 if not any(blob.name.endswith(ext) for ext in self.AUDIO_EXTENSIONS):
                     continue
                 
@@ -550,6 +558,10 @@ class AudioMonitor:
             
             # Count failed recordings
             for blob in failed_container.list_blobs():
+                # Filter by organization prefix if specified
+                if org_prefix and not blob.name.startswith(org_prefix):
+                    continue
+                
                 if not any(blob.name.endswith(ext) for ext in self.AUDIO_EXTENSIONS):
                     continue
                 if blob.last_modified and blob.last_modified.replace(tzinfo=None) >= cutoff_date:
