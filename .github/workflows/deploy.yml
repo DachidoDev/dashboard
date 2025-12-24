@@ -29,18 +29,19 @@ jobs:
         with:
           creds: ${{ secrets.AZURE_CREDENTIALS }}
       
-      - name: Set startup command in Azure
-        run: |
-          az webapp config set \
-            --name ${{ secrets.AZURE_WEBAPP_NAME }} \
-            --resource-group ${{ secrets.AZURE_RESOURCE_GROUP }} \
-            --startup-file "gunicorn --bind=0.0.0.0:8000 --timeout 600 --workers 2 --threads 4 --access-logfile - --error-logfile - app:app"
-      
       - name: Deploy to Azure Web App
         uses: azure/webapps-deploy@v3
         with:
           app-name: ${{ secrets.AZURE_WEBAPP_NAME }}
           package: .
+      
+      - name: Set startup command in Azure (after deployment)
+        run: |
+          echo "Setting startup command after deployment to avoid SCM restart conflict..."
+          az webapp config set \
+            --name ${{ secrets.AZURE_WEBAPP_NAME }} \
+            --resource-group ${{ secrets.AZURE_RESOURCE_GROUP }} \
+            --startup-file "gunicorn --bind=0.0.0.0:8000 --timeout 600 --workers 2 --threads 4 --access-logfile - --error-logfile - app:app" || echo "Startup command may already be set"
       
       - name: Azure Logout
         run: az logout
