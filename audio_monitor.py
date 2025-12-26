@@ -760,32 +760,139 @@ class AudioMonitor:
     # Helper methods
     
     def _has_transcription(self, audio_filename: str) -> bool:
-        """Check if transcription exists"""
-        transcription_name = audio_filename.rsplit('.', 1)[0] + '_transcription.json'
+        """
+        Check if transcription exists
+        Handles multiple naming conventions
+        """
+        base_name = audio_filename.rsplit('.', 1)[0]
+        transcription_name = base_name + '_transcription.json'
+        
+        # List of possible transcription file names to try
+        possible_names = []
+        
+        if '/' in transcription_name:
+            org_prefix, filename_part = transcription_name.split('/', 1)
+            possible_names = [
+                transcription_name,
+                filename_part,
+                f"{org_prefix}/{filename_part.replace('_transcription.json', '.json')}",
+                filename_part.replace('_transcription.json', '.json'),
+            ]
+        else:
+            possible_names = [
+                transcription_name,
+                base_name + '.json',
+            ]
+        
+        # Try each possible name
+        for name in possible_names:
+            try:
+                blob = self.blob_client.get_blob_client(
+                    Config.TRANSCRIPTIONS_CONTAINER,
+                    name
+                )
+                blob.get_blob_properties()
+                return True
+            except ResourceNotFoundError:
+                continue
+            except:
+                continue
+        
+        # If not found with standard names, search container
         try:
-            blob = self.blob_client.get_blob_client(
-                Config.TRANSCRIPTIONS_CONTAINER,
-                transcription_name
-            )
-            blob.get_blob_properties()
-            return True
-        except ResourceNotFoundError:
-            return False
+            container = self.blob_client.get_container_client(Config.TRANSCRIPTIONS_CONTAINER)
+            search_base = base_name.split('/')[-1] if '/' in base_name else base_name
+            
+            for blob in container.list_blobs():
+                if search_base in blob.name and blob.name.endswith('.json'):
+                    return True
         except:
-            return False
+            pass
+        
+        return False
     
     def _get_transcription(self, audio_filename: str) -> Optional[Dict]:
-        """Get transcription data for audio file"""
-        transcription_name = audio_filename.rsplit('.', 1)[0] + '_transcription.json'
+        """
+        Get transcription data for audio file
+        Handles multiple naming conventions and organization prefixes
+        """
+        # Create transcription filename (preserves organization prefix if present)
+        # Example: testcompany/recording1.mp3 -> testcompany/recording1_transcription.json
+        base_name = audio_filename.rsplit('.', 1)[0]
+        transcription_name = base_name + '_transcription.json'
+        
+        # List of possible transcription file names to try
+        possible_names = []
+        
+        # If filename has organization prefix, try both with and without
+        if '/' in transcription_name:
+            org_prefix, filename_part = transcription_name.split('/', 1)
+            possible_names = [
+                transcription_name,  # testcompany/recording1_transcription.json
+                filename_part,  # recording1_transcription.json (no prefix)
+                f"{org_prefix}/{filename_part.replace('_transcription.json', '.json')}",  # testcompany/recording1.json
+                filename_part.replace('_transcription.json', '.json'),  # recording1.json
+            ]
+        else:
+            possible_names = [
+                transcription_name,  # recording1_transcription.json
+                base_name + '.json',  # recording1.json
+            ]
+        
+        # Try each possible name
+        for name in possible_names:
+            try:
+                print(f"🔍 Trying to get transcription: {name}")  # Debug log
+                blob = self.blob_client.get_blob_client(
+                    Config.TRANSCRIPTIONS_CONTAINER,
+                    name
+                )
+                data = blob.download_blob().readall()
+                transcription_data = json.loads(data)
+                print(f"✅ Successfully retrieved transcription: {name}")  # Debug log
+                return transcription_data
+            except ResourceNotFoundError:
+                continue  # Try next name
+            except json.JSONDecodeError as e:
+                print(f"⚠️  Invalid JSON in transcription file {name}: {e}")
+                continue
+            except Exception as e:
+                print(f"⚠️  Error retrieving transcription {name}: {e}")
+                continue
+        
+        # If all attempts failed, try listing container to see what files exist
         try:
-            blob = self.blob_client.get_blob_client(
-                Config.TRANSCRIPTIONS_CONTAINER,
-                transcription_name
-            )
-            data = blob.download_blob().readall()
-            return json.loads(data)
-        except:
-            return None
+            print(f"🔍 Transcription not found. Searching in container: {Config.TRANSCRIPTIONS_CONTAINER}")
+            container = self.blob_client.get_container_client(Config.TRANSCRIPTIONS_CONTAINER)
+            
+            # Get base filename without extension for search
+            search_base = base_name.split('/')[-1] if '/' in base_name else base_name
+            
+            # List blobs that might match
+            matching_blobs = []
+            for blob in container.list_blobs():
+                if search_base in blob.name and blob.name.endswith('.json'):
+                    matching_blobs.append(blob.name)
+            
+            if matching_blobs:
+                print(f"📋 Found potential transcription files: {matching_blobs[:5]}")  # Show first 5
+                # Try the first matching blob
+                try:
+                    blob = self.blob_client.get_blob_client(
+                        Config.TRANSCRIPTIONS_CONTAINER,
+                        matching_blobs[0]
+                    )
+                    data = blob.download_blob().readall()
+                    transcription_data = json.loads(data)
+                    print(f"✅ Found transcription using search: {matching_blobs[0]}")
+                    return transcription_data
+                except Exception as e:
+                    print(f"⚠️  Error reading found transcription: {e}")
+        except Exception as e:
+            print(f"⚠️  Error searching transcription container: {e}")
+        
+        print(f"❌ Transcription not found for: {audio_filename}")
+        return None
     
     def _get_error_metadata(self, audio_filename: str) -> Optional[Dict]:
         """Get error metadata for failed recording"""

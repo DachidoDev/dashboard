@@ -2831,8 +2831,8 @@
                         const language = rec.detected_language || rec.language_code || rec.source_language || 'Unknown';
                         const safeFilename = rec.filename.replace(/'/g, "\\'").replace(/"/g, '&quot;').replace(/\//g, '\\/');
                         
-                        // Build action buttons - admin gets review buttons, customer_admin only gets Listen
-                        let actionButtons = `<button onclick="viewTranslation('${safeFilename}')" style="padding: 6px 10px; background: var(--primary-green); color: white; border: none; border-radius: 4px; cursor: pointer; margin: 2px; font-size: 11px;">Listen</button>`;
+                        // Build action buttons - admin gets review buttons, customer_admin only gets Info
+                        let actionButtons = `<button onclick="viewTranslation('${safeFilename}')" style="padding: 6px 10px; background: var(--primary-green); color: white; border: none; border-radius: 4px; cursor: pointer; margin: 2px; font-size: 11px;">Info</button>`;
                         
                         if (isAdmin) {
                             // Admin can review quality - show Good/Bad buttons only if not already reviewed
@@ -3246,6 +3246,9 @@
             fetch(`/api/audio/detail/${encodeURIComponent(filename)}?container=processed`)
                 .then(res => res.json())
                 .then(data => {
+                    console.log('📋 Transcription data received:', data); // Debug log
+                    console.log('📋 Transcription object:', data.transcription); // Debug log
+                    
                     document.getElementById('translationModal').style.display = 'block';
                     document.getElementById('modalFilename').textContent = filename;
                     document.getElementById('modalAudio').src = data.url;
@@ -3255,12 +3258,55 @@
                     
                     if (data.transcription) {
                         const t = data.transcription;
+                        console.log('📋 Full transcription data:', t); // Debug log - show entire object
+                        console.log('📋 Transcription fields:', Object.keys(t)); // Debug log - show all available fields
+                        
                         const audioDur = t.audio_duration || 0;
-                        const procTime = t.translation_time || 0;
+                        const procTime = t.translation_time || t.processing_time || 0;
                         const ratio = audioDur > 0 && procTime > 0 ? (audioDur / procTime).toFixed(2) : 'N/A';
                         
-                        // Show original transcription
-                        document.getElementById('modalTranscription').textContent = t.transcription || t.original_text || 'Original transcription not available';
+                        // Show original transcription - IMPORTANT: The transcription text is in the "translation" field!
+                        // Based on the JSON structure: {"translation": "actual transcription text", ...}
+                        let originalText = '';
+                        
+                        // The transcription text is stored in the "translation" field (confusing naming, but that's how it's stored)
+                        // Check translation field first (this contains the actual transcription text)
+                        if (t.translation && typeof t.translation === 'string' && t.translation.trim()) {
+                            originalText = t.translation;
+                            console.log('✅ Found transcription in "translation" field'); // Debug log
+                        } else {
+                            // Fallback: check other possible field names
+                            const possibleFields = [
+                                'text', 'transcription', 'original_transcription', 'original_text', 
+                                'source_text', 'original', 'content', 'source', 'input_text',
+                                'raw_text', 'transcribed_text', 'audio_text'
+                            ];
+                            
+                            for (const field of possibleFields) {
+                                if (t[field] && typeof t[field] === 'string' && t[field].trim()) {
+                                    originalText = t[field];
+                                    console.log(`✅ Found transcription in field: ${field}`); // Debug log
+                                    break;
+                                }
+                            }
+                            
+                            // If still not found, check if transcription itself is a string
+                            if (!originalText && typeof t === 'string') {
+                                originalText = t;
+                                console.log('✅ Transcription is a string'); // Debug log
+                            }
+                        }
+                        
+                        console.log('📋 Original text found:', originalText ? 'YES' : 'NO', 'Length:', originalText.length); // Debug log
+                        console.log('📋 Original text preview:', originalText.substring(0, 100)); // Debug log - first 100 chars
+                        
+                        if (originalText && originalText.trim()) {
+                            document.getElementById('modalTranscription').textContent = originalText;
+                        } else {
+                            document.getElementById('modalTranscription').textContent = 'Original transcription not available';
+                            console.warn('⚠️ No transcription text found. Available fields:', Object.keys(t)); // Debug log
+                            console.warn('⚠️ Transcription object values:', JSON.stringify(t, null, 2)); // Debug log - show full object
+                        }
                         
                         // Hide translation section for customer_admin
                         const translationSection = document.getElementById('translationSection');
@@ -3268,18 +3314,27 @@
                             translationSection.style.display = 'none';
                         } else {
                             translationSection.style.display = 'block';
-                            // Show English translation for admin
-                            document.getElementById('modalTranslation').textContent = t.translation || 'No translation available';
-                            document.getElementById('modalTranslation').style.color = '';
-                            document.getElementById('modalTranslation').style.fontStyle = '';
+                            // NOTE: The "translation" field contains the original transcription, not an English translation
+                            // If there's a separate English translation field, it would be here
+                            // For now, show a message that translation is the same as transcription
+                            // (or check if there's a separate english_translation field)
+                            const englishTranslation = t.english_translation || t.english || t.translated_text || '';
+                            if (englishTranslation) {
+                                document.getElementById('modalTranslation').textContent = englishTranslation;
+                            } else {
+                                // If no separate English translation exists, show message
+                                document.getElementById('modalTranslation').textContent = 'English translation not available (transcription is in original language)';
+                                document.getElementById('modalTranslation').style.color = '#999';
+                                document.getElementById('modalTranslation').style.fontStyle = 'italic';
+                            }
                         }
                         
                         // Show metadata in grid format
                         document.getElementById('modalMetadata').innerHTML = `
                             <div style="background: #f8f9fa; padding: 15px; border-radius: 8px;">
                                 <strong>Language</strong><br>
-                                <span style="font-size: 18px; color: var(--primary-green);">${t.detected_language || 'Unknown'}</span>
-                                <span style="color: #666; font-size: 12px;">(${t.language_code || 'N/A'})</span>
+                                <span style="font-size: 18px; color: var(--primary-green);">${t.detected_language || t.language || 'Unknown'}</span>
+                                <span style="color: #666; font-size: 12px;">(${t.language_code || t.lang_code || 'N/A'})</span>
                             </div>
                             <div style="background: #f8f9fa; padding: 15px; border-radius: 8px;">
                                 <strong>Confidence</strong><br>
@@ -3299,10 +3354,11 @@
                             </div>
                             <div style="background: #f8f9fa; padding: 15px; border-radius: 8px;">
                                 <strong>Word Count</strong><br>
-                                <span style="font-size: 18px; color: var(--primary-green);">${t.word_count || 'N/A'}</span>
+                                <span style="font-size: 18px; color: var(--primary-green);">${t.word_count || t.words || 'N/A'}</span>
                             </div>
                         `;
                     } else {
+                        console.warn('⚠️ No transcription data in response:', data); // Debug log
                         document.getElementById('modalTranscription').textContent = 'Original transcription not available';
                         document.getElementById('modalTranslation').textContent = 'Translation not available';
                         document.getElementById('modalMetadata').innerHTML = '<div style="background: #f8f9fa; padding: 15px; border-radius: 8px; grid-column: 1/-1;">No metadata available</div>';
@@ -3456,40 +3512,54 @@
             return url;
         }
 
-        // Initialize
-        document.addEventListener('DOMContentLoaded', function() {
-            setupNavigation();
-            loadFilterOptions();
-            loadHomeData();
-            
-            // Add organization selector change handler for Dachido admins
+        // Function to handle organization change
+        function handleOrganizationChange(event) {
             const orgSelector = document.getElementById('organizationSelector');
-            if (orgSelector) {
-                orgSelector.addEventListener('change', function() {
-                    const selectedOrg = this.value || 'All Organizations';
-                    console.log('Organization changed to:', selectedOrg); // Debug log
+            if (!orgSelector) {
+                console.warn('Organization selector not found');
+                return;
+            }
+            
+            const selectedOrg = orgSelector.value || '';
+            console.log('🔄 Organization changed to:', selectedOrg || 'All Organizations'); // Debug log
+            
+            // Reset audio pagination when organization changes
+            if (audioCurrentPage) {
+                audioCurrentPage.processed = 0;
+                audioCurrentPage.pending = 0;
+                audioCurrentPage.failed = 0;
+            }
+            
+            // Get the currently active module
+            const activeModule = document.querySelector('.nav-item.active')?.getAttribute('data-module');
+            console.log('📋 Active module:', activeModule); // Debug log
+            
+            // Always reload the active module when organization changes
+            if (activeModule) {
+                console.log('🔄 Reloading module:', activeModule, 'with organization:', selectedOrg || 'All Organizations'); // Debug log
+                
+                // Special handling for audio module
+                if (activeModule === 'audio') {
+                    // Show loading state for all audio tables
+                    const processedTbody = document.getElementById('audioProcessedTable');
+                    const pendingTbody = document.getElementById('audioPendingTable');
+                    const failedTbody = document.getElementById('audioFailedTable');
                     
-                    // Reset audio pagination when organization changes
-                    if (audioCurrentPage) {
-                        audioCurrentPage.processed = 0;
-                        audioCurrentPage.pending = 0;
-                        audioCurrentPage.failed = 0;
-                    }
+                    if (processedTbody) processedTbody.innerHTML = '<tr><td colspan="8" style="text-align: center;"><div class="spinner"></div> Loading...</td></tr>';
+                    if (pendingTbody) pendingTbody.innerHTML = '<tr><td colspan="4" style="text-align: center;"><div class="spinner"></div> Loading...</td></tr>';
+                    if (failedTbody) failedTbody.innerHTML = '<tr><td colspan="4" style="text-align: center;"><div class="spinner"></div> Loading...</td></tr>';
                     
-                    // Get the currently active module
-                    const activeModule = document.querySelector('.nav-item.active')?.getAttribute('data-module');
+                    // Force reload all audio data immediately
+                    console.log('🔄 Reloading audio module data...'); // Debug log
+                    loadAudioOverview(); // Reload overview stats immediately
                     
-                    // If audio module is active, reload it immediately with fresh data
-                    if (activeModule === 'audio') {
-                        console.log('Reloading audio module with new organization filter'); // Debug log
-                        // Force reload all audio data
-                        loadAudioOverview(); // Reload overview stats immediately
-                        
+                    // Small delay to ensure overview loads first, then reload active tab
+                    setTimeout(() => {
                         // Get the currently active audio tab and reload its data
                         const activeAudioTab = document.querySelector('.audio-tab-btn.active');
                         if (activeAudioTab) {
                             const activeTabName = activeAudioTab.getAttribute('data-audio-tab');
-                            console.log('Reloading active audio tab:', activeTabName); // Debug log
+                            console.log('🔄 Reloading active audio tab:', activeTabName, 'with organization:', selectedOrg || 'All Organizations'); // Debug log
                             // Reset pagination for the active tab
                             if (activeTabName === 'processed') {
                                 audioCurrentPage.processed = 0;
@@ -3507,16 +3577,62 @@
                             }
                         } else {
                             // No active tab, default to processed
+                            console.log('🔄 No active tab found, defaulting to processed'); // Debug log
                             audioCurrentPage.processed = 0;
                             loadAudioProcessed(0);
                         }
-                    } else if (activeModule) {
-                        // For other modules, use the standard reload
-                        console.log('Reloading module:', activeModule); // Debug log
-                        loadModuleData(activeModule);
-                    }
-                });
+                    }, 150); // Small delay to ensure overview loads first
+                } else {
+                    // For other modules (home, marketing, operations, etc.), reload them
+                    console.log('🔄 Reloading module:', activeModule);
+                    loadModuleData(activeModule);
+                }
+            } else {
+                // No active module, reload home by default
+                console.log('🔄 No active module, reloading home');
+                loadHomeData();
             }
+        }
+
+        // Initialize
+        document.addEventListener('DOMContentLoaded', function() {
+            setupNavigation();
+            loadFilterOptions();
+            loadHomeData();
+            
+            // Add organization selector change handler for Dachido admins
+            // Try multiple times in case element isn't ready yet
+            function attachOrgSelectorHandler() {
+                const orgSelector = document.getElementById('organizationSelector');
+                if (orgSelector) {
+                    // Remove any existing listeners by cloning the element
+                    const newSelector = orgSelector.cloneNode(true);
+                    orgSelector.parentNode.replaceChild(newSelector, orgSelector);
+                    
+                    // Attach new listener to the new element
+                    const newOrgSelector = document.getElementById('organizationSelector');
+                    if (newOrgSelector) {
+                        newOrgSelector.addEventListener('change', handleOrganizationChange);
+                        console.log('✅ Organization selector handler attached successfully');
+                    }
+                } else {
+                    // Retry after a short delay if element not found
+                    console.log('⏳ Organization selector not found, retrying...');
+                    setTimeout(attachOrgSelectorHandler, 100);
+                }
+            }
+            
+            attachOrgSelectorHandler();
+            
+            // Also attach directly as a fallback (in case the element exists but the function above didn't catch it)
+            setTimeout(() => {
+                const orgSelector = document.getElementById('organizationSelector');
+                if (orgSelector && !orgSelector.hasAttribute('data-handler-attached')) {
+                    orgSelector.addEventListener('change', handleOrganizationChange);
+                    orgSelector.setAttribute('data-handler-attached', 'true');
+                    console.log('✅ Organization selector handler attached (fallback)');
+                }
+            }, 500);
         });
     </script>
 </body>

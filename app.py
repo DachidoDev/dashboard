@@ -21,11 +21,12 @@ except ImportError:
     print("⚠️  python-dotenv not installed")
 
 try:
-    from audio_monitor import AudioMonitor
+    from audio_monitor import AudioMonitor, Config as AudioConfig
     AUDIO_MONITOR_ENABLED = True
     print("✅ Audio monitoring enabled")
 except ImportError as e:
     AUDIO_MONITOR_ENABLED = False
+    AudioConfig = None
     print(f"⚠️  Audio monitoring not available: {e}")
 
 # try to solve Azure issue
@@ -2077,6 +2078,47 @@ def get_audio_processed():
         # Only include transcription data if explicitly requested (for detail view)
         include_transcription = request.args.get("include_transcription", "false").lower() == "true"
         
+        # Try cache first if organization is specified (faster)
+        use_cache = request.args.get("use_cache", "true").lower() == "true"
+        if use_cache and organization and organization != "dachido":
+            try:
+                from audio_cache import get_recordings_from_cache, should_sync_cache, sync_recordings_to_cache
+                
+                # Check if cache needs sync (every 5 minutes)
+                if should_sync_cache(organization, "processed-recordings", max_age_minutes=5):
+                    # Sync in background (don't wait)
+                    import threading
+                    threading.Thread(target=sync_recordings_to_cache, args=(organization, False), daemon=True).start()
+                
+                # Get from cache
+                cache_result = get_recordings_from_cache(organization, "processed", limit, offset)
+                if cache_result.get("recordings"):
+                    # Apply filters
+                    recordings = cache_result["recordings"]
+                    if quality_filter:
+                        recordings = [r for r in recordings if r.get("quality_rating") == quality_filter]
+                    if language_filter:
+                        recordings = [r for r in recordings if r.get("language_code") == language_filter or r.get("detected_language") == language_filter]
+                    
+                    # Hide translations for customer_admin
+                    user_role = g.role
+                    if user_role == "customer_admin":
+                        for recording in recordings:
+                            recording.pop("translation", None)
+                    
+                    return jsonify({
+                        "recordings": recordings[:limit],
+                        "total": len(recordings),
+                        "limit": limit,
+                        "offset": offset,
+                        "cached": True
+                    })
+            except ImportError:
+                pass  # Cache module not available, fall through to direct query
+            except Exception as e:
+                print(f"Cache error: {e}")  # Log but continue with direct query
+        
+        # Fallback to direct Azure query
         monitor = AudioMonitor()
         result = monitor.get_processed_recordings(
             limit=limit, offset=offset,
@@ -2117,6 +2159,23 @@ def get_audio_failed():
         
         limit = int(request.args.get("limit", 50))
         offset = int(request.args.get("offset", 0))
+        
+        # Try cache first if organization is specified
+        use_cache = request.args.get("use_cache", "true").lower() == "true"
+        if use_cache and organization and organization != "dachido":
+            try:
+                from audio_cache import get_recordings_from_cache, should_sync_cache, sync_recordings_to_cache
+                
+                if should_sync_cache(organization, "failedrecordings", max_age_minutes=5):
+                    import threading
+                    threading.Thread(target=sync_recordings_to_cache, args=(organization, False), daemon=True).start()
+                
+                cache_result = get_recordings_from_cache(organization, "failed", limit, offset)
+                if cache_result.get("recordings"):
+                    return jsonify({**cache_result, "cached": True})
+            except:
+                pass  # Fall through to direct query
+        
         monitor = AudioMonitor()
         result = monitor.get_failed_recordings(limit=limit, offset=offset, organization=organization)
         return jsonify(result)
@@ -2152,19 +2211,22 @@ def get_audio_recording_detail(filename):
         return jsonify({"error": "Audio monitoring not enabled"}), 503
     try:
         container = request.args.get("container", "processed")
+        
+        # Validate organization access - ensure user can only access their organization's files
+        if not g.is_dachido_admin:
+            # For regular users, ensure filename starts with their organization prefix
+            org_prefix = f"{g.organization}/"
+            if not filename.startswith(org_prefix):
+                return jsonify({"error": "Access denied: File does not belong to your organization"}), 403
+        
         monitor = AudioMonitor()
         detail = monitor.get_recording_detail(filename, container=container)
         
-        # Hide translations for customer_admin
+        # NOTE: For customer_admin, the "translation" field contains the original transcription text
+        # We should NOT remove it - it's the actual transcription they need to see
+        # The field name is confusing, but "translation" = original transcription text
         user_role = g.role
-        if user_role == "customer_admin":
-            # Remove translation from transcription data
-            if detail.get("transcription"):
-                if isinstance(detail["transcription"], dict):
-                    detail["transcription"].pop("translation", None)
-                    detail["transcription"]["translation"] = ""  # Set to empty string
-                elif isinstance(detail["transcription"], str):
-                    detail["transcription"] = ""
+        # No need to hide anything - the "translation" field IS the transcription text
         
         return jsonify(detail)
     except Exception as e:
@@ -2291,7 +2353,87 @@ def get_audio_language_breakdown():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
+@app.route("/api/audio/sync-cache", methods=["POST"])
+@login_required
+def sync_audio_cache():
+    """Manually trigger cache sync (admin only)"""
+    if not g.is_dachido_admin:
+        return jsonify({"error": "Unauthorized"}), 403
+    
+    if not AUDIO_MONITOR_ENABLED:
+        return jsonify({"error": "Audio monitoring not enabled"}), 503
+    
+    try:
+        from audio_cache import sync_recordings_to_cache, init_cache_tables
+        
+        init_cache_tables()
+        organization = request.json.get("organization") if request.json else None
+        force = request.json.get("force", False) if request.json else False
+        
+        result = sync_recordings_to_cache(organization=organization, force=force)
+        return jsonify(result)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route("/api/audio/debug-transcription/<path:filename>")
+@login_required
+def debug_transcription(filename):
+    """Debug endpoint to check transcription file availability"""
+    if not AUDIO_MONITOR_ENABLED:
+        return jsonify({"error": "Audio monitoring not enabled"}), 503
+    
+    try:
+        monitor = AudioMonitor()
+        
+        # Validate organization access
+        if not g.is_dachido_admin:
+            org_prefix = f"{g.organization}/"
+            if not filename.startswith(org_prefix):
+                return jsonify({"error": "Access denied"}), 403
+        
+        # Try to get transcription
+        transcription_data = monitor._get_transcription(filename)
+        
+        # List container to see what files exist
+        from audio_monitor import Config as AudioConfig
+        container = monitor.blob_client.get_container_client(AudioConfig.TRANSCRIPTIONS_CONTAINER)
+        base_name = filename.rsplit('.', 1)[0]
+        search_base = base_name.split('/')[-1] if '/' in base_name else base_name
+        
+        all_json_files = []
+        matching_files = []
+        for blob in container.list_blobs():
+            if blob.name.endswith('.json'):
+                all_json_files.append(blob.name)
+                if search_base in blob.name:
+                    matching_files.append(blob.name)
+        
+        return jsonify({
+            "filename": filename,
+            "transcription_found": transcription_data is not None,
+            "transcription_data": transcription_data if transcription_data else None,
+            "expected_names": [
+                base_name + '_transcription.json',
+                base_name.split('/')[-1] + '_transcription.json' if '/' in base_name else None,
+                base_name + '.json',
+                base_name.split('/')[-1] + '.json' if '/' in base_name else None,
+            ],
+            "matching_files": matching_files[:10],  # First 10 matches
+            "total_json_files_in_container": len(all_json_files),
+            "sample_json_files": all_json_files[:10]  # First 10 files
+        })
+    except Exception as e:
+        import traceback
+        return jsonify({"error": str(e), "traceback": traceback.format_exc()}), 500
+
 ################################################
+
+# Initialize audio cache tables on startup
+try:
+    from audio_cache import init_cache_tables
+    init_cache_tables()
+except Exception as e:
+    print(f"⚠️  Could not initialize audio cache: {e}")
 
 # Initialize default organizations and users on app startup
 # This runs when the module is imported, ensuring data directories exist
