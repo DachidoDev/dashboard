@@ -195,12 +195,17 @@ def get_user_from_token():
     """
     token = request.cookies.get("auth_token")
     if not token:
+        print("⚠️  No auth_token cookie found in request")
+        print(f"⚠️  Available cookies: {list(request.cookies.keys())}")
         return None, None, None
     
+    print(f"✅ Found auth_token cookie: {token[:50]}...")  # Debug: show first 50 chars
     success, payload = verify_jwt_token(token)
     if not success:
+        print(f"⚠️  Token verification failed: {payload}")
         return None, None, None
     
+    print(f"✅ Token verified successfully for: {payload.get('organization')}:{payload.get('username')}")
     return payload.get("username"), payload.get("organization"), payload.get("role")
 
 
@@ -213,12 +218,18 @@ def login_required(f):
     """
     Decorator to protect routes requiring authentication
     Validates JWT token and populates g object with user info
+    For API routes, returns JSON error instead of redirecting
     """
     @wraps(f)
     def decorated_function(*args, **kwargs):
         username, organization, role = get_user_from_token()
         
         if not username or not organization:
+            # Check if this is an API route (starts with /api/)
+            if request.path.startswith('/api/'):
+                from flask import jsonify
+                return jsonify({"error": "Authentication required", "redirect": "/login"}), 401
+            # For non-API routes, redirect to login
             return redirect(url_for("login"))
         
         # Store user info in Flask's g object for use in the request
@@ -226,6 +237,10 @@ def login_required(f):
         g.organization = organization
         g.role = role
         g.is_dachido_admin = is_dachido_admin(organization, role)
+        
+        # Debug logging for API routes
+        if request.path.startswith('/api/'):
+            print(f"🔐 API Request - User: {username}, Org: {organization}, Role: {role}, Is Dachido Admin: {g.is_dachido_admin}")
         
         return f(*args, **kwargs)
     

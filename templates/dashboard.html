@@ -1379,6 +1379,7 @@
         // HOME MODULE
         function loadHomeData() {
             const dateFilter = getDateFilter();
+            const orgParam = getOrganizationParam();
             
             fetch(`/api/home/kpis?date=${dateFilter}`)
                 .then(res => res.json())
@@ -2658,8 +2659,19 @@
 
         function loadAudioOverview() {
             // Load overview statistics (pending, processed, failed counts)
-            fetch(appendOrgParam('/api/audio/overview'))
-                .then(res => res.json())
+            fetch(appendOrgParam('/api/audio/overview'), {
+                credentials: 'include'  // Ensure cookies are sent with request
+            })
+                .then(res => {
+                    if (!res.ok) {
+                        throw new Error(`HTTP error! status: ${res.status}`);
+                    }
+                    const contentType = res.headers.get("content-type");
+                    if (!contentType || !contentType.includes("application/json")) {
+                        throw new Error("Response is not JSON - likely authentication issue");
+                    }
+                    return res.json();
+                })
                 .then(data => {
                     if (data.pending !== undefined) {
                         document.getElementById('audioPendingCount').textContent = data.pending || 0;
@@ -2790,8 +2802,23 @@
             }
             
             const orgParam = getOrganizationParam();
-            fetch(`/api/audio/processed?limit=${audioPageSize}&offset=${offset}&include_transcription=false${orgParam}`)
-                .then(res => res.json())
+            fetch(`/api/audio/processed?limit=${audioPageSize}&offset=${offset}&include_transcription=false${orgParam}`, {
+                credentials: 'include'  // Ensure cookies are sent with request
+            })
+                .then(res => {
+                    if (!res.ok) {
+                        throw new Error(`HTTP error! status: ${res.status}`);
+                    }
+                    const contentType = res.headers.get("content-type");
+                    if (!contentType || !contentType.includes("application/json")) {
+                        console.error('Response is not JSON, got:', contentType);
+                        return res.text().then(text => {
+                            console.error('Response body:', text.substring(0, 200));
+                            throw new Error("Response is not JSON - likely authentication issue");
+                        });
+                    }
+                    return res.json();
+                })
                 .then(data => {
                     const total = data.total || data.recordings.length;
                     
@@ -2894,8 +2921,22 @@
             }
             
             const orgParam = getOrganizationParam();
-            fetch(`/api/audio/pending?limit=${audioPageSize}&offset=${offset}${orgParam}`)
-                .then(res => res.json())
+            fetch(`/api/audio/pending?limit=${audioPageSize}&offset=${offset}${orgParam}`, {
+                credentials: 'include'  // Ensure cookies are sent with request
+            })
+                .then(res => {
+                    if (!res.ok) {
+                        throw new Error(`HTTP error! status: ${res.status}`);
+                    }
+                    const contentType = res.headers.get("content-type");
+                    if (!contentType || !contentType.includes("application/json")) {
+                        return res.text().then(text => {
+                            console.error('Response is not JSON:', text.substring(0, 200));
+                            throw new Error("Response is not JSON - likely authentication issue");
+                        });
+                    }
+                    return res.json();
+                })
                 .then(data => {
                     const tbody = document.getElementById('audioPendingTable');
                     const total = data.total || data.recordings.length;
@@ -2933,8 +2974,22 @@
             }
             
             const orgParam = getOrganizationParam();
-            fetch(`/api/audio/failed?limit=${audioPageSize}&offset=${offset}${orgParam}`)
-                .then(res => res.json())
+            fetch(`/api/audio/failed?limit=${audioPageSize}&offset=${offset}${orgParam}`, {
+                credentials: 'include'  // Ensure cookies are sent with request
+            })
+                .then(res => {
+                    if (!res.ok) {
+                        throw new Error(`HTTP error! status: ${res.status}`);
+                    }
+                    const contentType = res.headers.get("content-type");
+                    if (!contentType || !contentType.includes("application/json")) {
+                        return res.text().then(text => {
+                            console.error('Response is not JSON:', text.substring(0, 200));
+                            throw new Error("Response is not JSON - likely authentication issue");
+                        });
+                    }
+                    return res.json();
+                })
                 .then(data => {
                     const tbody = document.getElementById('audioFailedTable');
                     const total = data.total || data.recordings.length;
@@ -3500,15 +3555,19 @@
         }
         
         // Helper function to append organization param to URL (handles both cases)
+        // Note: For regular organization users, the backend uses organization from JWT token
+        // Only Dachido admins need to pass organization parameter via selector
         function appendOrgParam(url) {
             const orgValue = getOrganizationValue();
             if (orgValue) {
                 const separator = url.includes('?') ? '&' : '?';
                 const finalUrl = url + separator + 'organization=' + orgValue;
-                console.log('API call with organization:', finalUrl); // Debug log
+                console.log('API call with organization filter:', finalUrl); // Debug log
                 return finalUrl;
             }
-            console.log('API call without organization filter:', url); // Debug log
+            // For regular users, backend uses organization from JWT token - this is expected
+            // Only log if we're in debug mode or if there's an actual issue
+            // console.log('API call without organization filter (using JWT token):', url); // Debug log
             return url;
         }
 
@@ -3617,14 +3676,22 @@
                     }
                 } else {
                     // Retry after a short delay if element not found
-                    console.log('⏳ Organization selector not found, retrying...');
-                    setTimeout(attachOrgSelectorHandler, 100);
+                    // Only retry a few times, then stop (regular users don't have this selector)
+                    if (!window.orgSelectorRetryCount) {
+                        window.orgSelectorRetryCount = 0;
+                    }
+                    window.orgSelectorRetryCount++;
+                    if (window.orgSelectorRetryCount < 3) {
+                        setTimeout(attachOrgSelectorHandler, 100);
+                    }
+                    // Don't log warning - regular users don't have organization selector
                 }
             }
             
             attachOrgSelectorHandler();
             
             // Also attach directly as a fallback (in case the element exists but the function above didn't catch it)
+            // Only for Dachido admins (they have the selector)
             setTimeout(() => {
                 const orgSelector = document.getElementById('organizationSelector');
                 if (orgSelector && !orgSelector.hasAttribute('data-handler-attached')) {
@@ -3632,6 +3699,7 @@
                     orgSelector.setAttribute('data-handler-attached', 'true');
                     console.log('✅ Organization selector handler attached (fallback)');
                 }
+                // Don't log warning if selector doesn't exist - regular users don't have it
             }, 500);
         });
     </script>

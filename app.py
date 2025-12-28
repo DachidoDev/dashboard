@@ -1866,9 +1866,17 @@ def login():
         if success:
             # Generate JWT token
             token = auth.generate_jwt_token(username, org, role)
+            print(f"✅ Login successful: {org}:{username} (role: {role})")
+            print(f"✅ JWT token generated: {token[:50]}...")  # Debug: show first 50 chars
             
             # Create response with redirect
             response = make_response(redirect(url_for("index")))
+            
+            # Determine if we're in production (for secure cookie)
+            # For localhost/development, secure=False allows cookies over HTTP
+            is_production = os.environ.get("FLASK_ENV") == "production"
+            is_secure = is_production and not request.host.startswith("127.0.0.1") and not request.host.startswith("localhost")
+            print(f"✅ Setting cookie - Production: {is_production}, Secure: {is_secure}, Host: {request.host}")
             
             # Set JWT token as HTTP-only cookie (30 minutes expiration)
             response.set_cookie(
@@ -1876,10 +1884,12 @@ def login():
                 token,
                 max_age=30 * 60,  # 30 minutes in seconds
                 httponly=True,
-                secure=os.environ.get("FLASK_ENV") == "production",  # HTTPS in production
-                samesite="Lax"
+                secure=is_secure,  # HTTPS only in production (not on localhost)
+                samesite="Lax",
+                path="/"  # Explicitly set path to root
             )
             
+            print(f"✅ Cookie 'auth_token' set successfully")
             return response
         else:
             return render_template("login.html", error="Invalid Organization, Username, or Password")
@@ -2025,14 +2035,29 @@ def get_audio_overview():
             view_org = request.args.get("organization")
             # Empty string or None means all organizations
             organization = view_org if view_org and view_org.strip() else None
+            print(f"🔍 Audio overview - Dachido admin, view_org param: {view_org}, using: {organization}")
         else:
             organization = g.organization
+            print(f"🔍 Audio overview - Regular user, organization from JWT: {organization}")
         
+        if not organization:
+            print(f"⚠️  Warning: No organization specified, returning empty stats")
+            return jsonify({"pending": 0, "processed": 0, "failed": 0})
+        
+        print(f"🔍 Creating AudioMonitor instance...")
         monitor = AudioMonitor()
+        if not monitor.enabled:
+            print(f"⚠️  AudioMonitor is disabled (missing Azure config)")
+            return jsonify({"error": "Audio monitoring not configured", "pending": 0, "processed": 0, "failed": 0}), 503
+        
+        print(f"🔍 Calling get_overview_stats for organization: {organization}")
         stats = monitor.get_overview_stats(organization=organization)
+        print(f"✅ Audio overview stats for {organization}: pending={stats.get('pending')}, processed={stats.get('processed')}, failed={stats.get('failed')}")
         return jsonify(stats)
     except Exception as e:
-        print(f"Audio overview error: {e}")
+        import traceback
+        print(f"❌ Audio overview error: {e}")
+        print(traceback.format_exc())
         return jsonify({"error": str(e), "pending": 0, "processed": 0, "failed": 0}), 500
 
 @app.route("/api/audio/pending")
@@ -2068,8 +2093,10 @@ def get_audio_processed():
             view_org = request.args.get("organization")
             # Empty string or None means all organizations
             organization = view_org if view_org and view_org.strip() else None
+            print(f"🔍 Audio processed - Dachido admin, view_org param: {view_org}, using: {organization}")
         else:
             organization = g.organization
+            print(f"🔍 Audio processed - Regular user, organization from JWT: {organization}")
         
         limit = int(request.args.get("limit", 50))
         offset = int(request.args.get("offset", 0))
@@ -2119,7 +2146,11 @@ def get_audio_processed():
                 print(f"Cache error: {e}")  # Log but continue with direct query
         
         # Fallback to direct Azure query
+        print(f"🔍 Creating AudioMonitor for processed recordings (fallback)...")
         monitor = AudioMonitor()
+        if not monitor.enabled:
+            return jsonify({"error": "Audio monitoring not configured", "recordings": [], "total": 0}), 503
+        print(f"🔍 Getting processed recordings for organization: {organization}, limit: {limit}, offset: {offset}")
         result = monitor.get_processed_recordings(
             limit=limit, offset=offset,
             quality_filter=quality_filter,
@@ -2127,6 +2158,7 @@ def get_audio_processed():
             include_transcription=include_transcription,
             organization=organization
         )
+        print(f"✅ Processed recordings result: {len(result.get('recordings', []))} records, total: {result.get('total', 0)}")
         
         # Hide translations for customer_admin
         user_role = g.role

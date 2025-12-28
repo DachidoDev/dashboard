@@ -101,7 +101,8 @@ def sync_recordings_to_cache(organization: Optional[str] = None, force: bool = F
             ("failedrecordings", "failed")
         ]
         
-        org_prefix = f"{organization}/" if organization and organization != "dachido" else None
+        # Organization filtering now uses case-insensitive matching via blob_matches_organization
+        # No need for org_prefix variable
         
         total_synced = 0
         
@@ -110,8 +111,8 @@ def sync_recordings_to_cache(organization: Optional[str] = None, force: bool = F
             synced_count = 0
             
             for blob in container.list_blobs():
-                # Filter by organization
-                if org_prefix and not blob.name.startswith(org_prefix):
+                # Filter by organization (case-insensitive)
+                if not AudioMonitor.blob_matches_organization(blob.name, organization):
                     continue
                 
                 # Extract organization from filename

@@ -41,6 +41,40 @@ class AudioMonitor:
     
     AUDIO_EXTENSIONS = {'.mp3', '.wav', '.m4a', '.flac', '.ogg', '.MP3', '.WAV', '.M4A', '.FLAC', '.OGG'}
     
+    @staticmethod
+    def normalize_org_name(org_name: str) -> str:
+        """
+        Normalize organization name for case-insensitive matching
+        Handles variations like: Coromandel, coromandel, COROMANDEL, Auto dialer, auto_dialer
+        Returns: lowercase, spaces/underscores normalized
+        """
+        if not org_name:
+            return ""
+        # Convert to lowercase and replace spaces/underscores with nothing for comparison
+        normalized = org_name.lower().strip().replace(' ', '').replace('_', '').replace('-', '')
+        return normalized
+    
+    @staticmethod
+    def blob_matches_organization(blob_name: str, organization: Optional[str]) -> bool:
+        """
+        Check if a blob belongs to an organization (case-insensitive)
+        Handles variations in organization name capitalization and formatting
+        """
+        if not organization or organization == "dachido":
+            return True  # Dachido admins see all, or no filter
+        
+        # Extract organization prefix from blob name
+        if '/' not in blob_name:
+            return False  # No prefix, doesn't match
+        
+        blob_org = blob_name.split('/')[0]
+        
+        # Normalize both for comparison
+        normalized_org = AudioMonitor.normalize_org_name(organization)
+        normalized_blob_org = AudioMonitor.normalize_org_name(blob_org)
+        
+        return normalized_org == normalized_blob_org
+    
     def __init__(self):
         # Do not raise on missing configuration during import/runtime.
         # Allow creating an AudioMonitor in a disabled/stub mode so the
@@ -69,16 +103,16 @@ class AudioMonitor:
             container = self.blob_client.get_container_client(Config.RECORDINGS_CONTAINER)
             pending = []
             
-            # Organization prefix for filtering
-            org_prefix = f"{organization}/" if organization and organization != "dachido" else None
+            # Organization filtering (case-insensitive matching)
+            # Note: We use blob_matches_organization instead of simple prefix matching
             
             # First pass: Count ALL pending recordings (before pagination)
             total = 0
             all_pending_blobs = []
             
             for blob in container.list_blobs():
-                # Filter by organization prefix if specified
-                if org_prefix and not blob.name.startswith(org_prefix):
+                # Filter by organization (case-insensitive)
+                if not self.blob_matches_organization(blob.name, organization):
                     continue
                 
                 # Check if it's an audio file
@@ -135,13 +169,14 @@ class AudioMonitor:
             processed = []
             candidates = []  # Store blob names that pass initial filters
             
-            # Organization prefix for filtering
-            org_prefix = f"{organization}/" if organization and organization != "dachido" else None
+            # Organization prefix for filtering (case-insensitive matching)
+            # Note: We use blob_matches_organization instead of simple prefix matching
+            # to handle case variations like "Coromandel" vs "coromandel"
             
             # First pass: collect all audio files (fast, no API calls)
             for blob in container.list_blobs():
-                # Filter by organization prefix if specified
-                if org_prefix and not blob.name.startswith(org_prefix):
+                # Filter by organization (case-insensitive)
+                if not self.blob_matches_organization(blob.name, organization):
                     continue
                 
                 # Check if it's an audio file
@@ -271,15 +306,15 @@ class AudioMonitor:
             container = self.blob_client.get_container_client(Config.FAILED_CONTAINER)
             failed = []
             
-            # Organization prefix for filtering
-            org_prefix = f"{organization}/" if organization and organization != "dachido" else None
+            # Organization filtering (case-insensitive matching)
+            # Note: We use blob_matches_organization instead of simple prefix matching
             
             # First pass: Count ALL failed recordings (before pagination)
             all_failed_blobs = []
             
             for blob in container.list_blobs():
-                # Filter by organization prefix if specified
-                if org_prefix and not blob.name.startswith(org_prefix):
+                # Filter by organization (case-insensitive)
+                if not self.blob_matches_organization(blob.name, organization):
                     continue
                 
                 # Check if it's an audio file
@@ -487,8 +522,8 @@ class AudioMonitor:
         try:
             cutoff_date = datetime.now() - timedelta(days=days)
             
-            # Organization prefix for filtering
-            org_prefix = f"{organization}/" if organization and organization != "dachido" else None
+            # Organization filtering (case-insensitive matching)
+            # Note: We use blob_matches_organization instead of simple prefix matching
             
             # Collect data from processed recordings
             processed_container = self.blob_client.get_container_client(Config.PROCESSED_CONTAINER)
@@ -499,8 +534,8 @@ class AudioMonitor:
             
             # Get processed recordings data
             for blob in processed_container.list_blobs():
-                # Filter by organization prefix if specified
-                if org_prefix and not blob.name.startswith(org_prefix):
+                # Filter by organization (case-insensitive)
+                if not self.blob_matches_organization(blob.name, organization):
                     continue
                 
                 if not any(blob.name.endswith(ext) for ext in self.AUDIO_EXTENSIONS):
@@ -558,8 +593,8 @@ class AudioMonitor:
             
             # Count failed recordings
             for blob in failed_container.list_blobs():
-                # Filter by organization prefix if specified
-                if org_prefix and not blob.name.startswith(org_prefix):
+                # Filter by organization (case-insensitive)
+                if not self.blob_matches_organization(blob.name, organization):
                     continue
                 
                 if not any(blob.name.endswith(ext) for ext in self.AUDIO_EXTENSIONS):
@@ -982,14 +1017,31 @@ class AudioMonitor:
             processed_container = self.blob_client.get_container_client(Config.PROCESSED_CONTAINER)
             failed_container = self.blob_client.get_container_client(Config.FAILED_CONTAINER)
             
-            # Organization prefix for filtering
-            org_prefix = f"{organization}/" if organization and organization != "dachido" else None
+            # Organization filtering (case-insensitive matching)
+            print(f"🔍 get_overview_stats - organization: {organization} (case-insensitive matching enabled)")
+            
+            # Debug: List first few blob names to see what prefixes exist
+            if organization:
+                sample_blobs = list(processed_container.list_blobs(max_results=10))
+                print(f"🔍 Sample blob names in processed container (first 10):")
+                for blob in sample_blobs:
+                    matches = self.blob_matches_organization(blob.name, organization)
+                    print(f"   - {blob.name} {'✅ MATCHES' if matches else '❌'}")
+                if sample_blobs:
+                    # Extract unique prefixes
+                    prefixes = set()
+                    for blob in sample_blobs:
+                        if '/' in blob.name:
+                            prefix = blob.name.split('/')[0]
+                            prefixes.add(prefix)
+                    print(f"🔍 Found organization prefixes in container: {sorted(prefixes)}")
+                    print(f"🔍 Looking for organization: '{organization}' (normalized: '{self.normalize_org_name(organization)}')")
             
             # Count audio files efficiently (just check extensions, no API calls per file)
             pending_count = 0
             for b in pending_container.list_blobs():
-                # Filter by organization prefix if specified
-                if org_prefix and not b.name.startswith(org_prefix):
+                # Filter by organization (case-insensitive)
+                if not self.blob_matches_organization(b.name, organization):
                     continue
                 
                 if any(b.name.endswith(ext) for ext in self.AUDIO_EXTENSIONS):
@@ -1006,10 +1058,10 @@ class AudioMonitor:
                         pending_count += 1  # No transcription, count as pending
             
             processed_count = sum(1 for b in processed_container.list_blobs() 
-                                if (not org_prefix or b.name.startswith(org_prefix))
+                                if self.blob_matches_organization(b.name, organization)
                                 and any(b.name.endswith(ext) for ext in self.AUDIO_EXTENSIONS))
             failed_count = sum(1 for b in failed_container.list_blobs() 
-                             if (not org_prefix or b.name.startswith(org_prefix))
+                             if self.blob_matches_organization(b.name, organization)
                              and any(b.name.endswith(ext) for ext in self.AUDIO_EXTENSIONS))
             
             return {
