@@ -190,9 +190,30 @@ def verify_jwt_token(token):
 
 def get_user_from_token():
     """
-    Extract user information from JWT token in cookie
+    Extract user information from JWT token in cookie or Easy Auth
     Returns (username, organization, role) or (None, None, None) if invalid
+    
+    Priority:
+    1. Try Easy Auth (if enabled)
+    2. Fall back to JWT token in cookie
     """
+    # Try Easy Auth first (if enabled)
+    try:
+        from easy_auth import is_easy_auth_enabled, get_user_from_easy_auth
+        
+        if is_easy_auth_enabled():
+            username, organization, role = get_user_from_easy_auth()
+            if username and organization:
+                print(f"✅ Easy Auth user: {organization}:{username} (role: {role})")
+                return username, organization, role
+    except ImportError:
+        # easy_auth module not available, continue with JWT
+        pass
+    except Exception as e:
+        print(f"⚠️  Easy Auth error: {e}")
+        # Fall through to JWT token check
+    
+    # Fall back to JWT token in cookie
     token = request.cookies.get("auth_token")
     if not token:
         print("⚠️  No auth_token cookie found in request")
@@ -267,3 +288,75 @@ def init_auth(app):
     # Set JWT secret key from app config if available
     global JWT_SECRET_KEY
     JWT_SECRET_KEY = app.config.get("SECRET_KEY", JWT_SECRET_KEY)
+
+
+# ============================================================================
+# RBAC (Role-Based Access Control) Helpers
+# ============================================================================
+
+def require_role(*allowed_roles):
+    """
+    Decorator to require specific roles
+    Usage: @require_role('dachido_admin', 'admin')
+    """
+    def decorator(f):
+        @wraps(f)
+        def decorated_function(*args, **kwargs):
+            if not hasattr(g, 'role'):
+                if request.path.startswith('/api/'):
+                    from flask import jsonify
+                    return jsonify({"error": "Authentication required"}), 401
+                return redirect(url_for("login"))
+            
+            if g.role not in allowed_roles:
+                if request.path.startswith('/api/'):
+                    from flask import jsonify
+                    return jsonify({"error": "Insufficient permissions"}), 403
+                return redirect(url_for("index"))
+            
+            return f(*args, **kwargs)
+        return decorated_function
+    return decorator
+
+
+def require_dachido_admin(f):
+    """Decorator to require Dachido admin role"""
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if not hasattr(g, 'is_dachido_admin') or not g.is_dachido_admin:
+            if request.path.startswith('/api/'):
+                from flask import jsonify
+                return jsonify({"error": "Dachido admin access required"}), 403
+            return redirect(url_for("index"))
+        return f(*args, **kwargs)
+    return decorated_function
+
+
+def can_access_organization(user_org, target_org, user_role):
+    """
+    Check if user can access data for a specific organization
+    - Dachido admins can access all organizations
+    - Regular users can only access their own organization
+    """
+    if is_dachido_admin(user_org, user_role):
+        return True
+    return user_org.lower() == target_org.lower()
+
+
+def has_permission(permission_name):
+    """
+    Check if user has a specific permission
+    Can be extended with a permissions system
+    """
+    if not hasattr(g, 'role'):
+        return False
+    
+    # Define permission mappings
+    permissions = {
+        'dachido_admin': ['*'],  # All permissions
+        'admin': ['view_dashboard', 'manage_users', 'view_analytics', 'manage_recordings'],
+        'customer_admin': ['view_dashboard', 'view_analytics', 'view_recordings']
+    }
+    
+    user_permissions = permissions.get(g.role, [])
+    return '*' in user_permissions or permission_name in user_permissions

@@ -557,6 +557,9 @@
             <div class="nav-item" data-module="engagement">ENGAGEMENT</div>
             <div class="nav-item" data-module="admin">ADMIN</div>
             <div class="nav-item" data-module="audio">LIBRARY</div>
+            {% if is_dachido_admin %}
+            <div class="nav-item" data-module="users">USER MANAGEMENT</div>
+            {% endif %}
         </nav>
         <div style="display: flex; align-items: center; gap: 20px;">
             {% if is_dachido_admin %}
@@ -1068,6 +1071,16 @@
             </div>
         </div>
 
+        <!-- USER MANAGEMENT MODULE (Dachido Admin Only) -->
+        {% if is_dachido_admin %}
+        <div class="module-view" id="users-module">
+            <div class="chart-title">User Management</div>
+            <div id="usersContainer" style="padding: 20px;">
+                <div class="loading"><div class="spinner"></div> Loading users...</div>
+            </div>
+        </div>
+        {% endif %}
+
         <!-- LIBRARY MODULE -->
         <div class="module-view" id="audio-module">
             <div class="kpi-row">
@@ -1290,14 +1303,20 @@
                         'operations': 'Operations Dashboard',
                         'engagement': 'Engagement Metrics',
                         'admin': 'Admin Panel',
-                        'audio': 'Library'
+                        'audio': 'Library',
+                        'users': 'User Management'
                     };
                     document.getElementById('current-module').textContent = moduleNames[module];
                     
                     document.querySelectorAll('.module-view').forEach(v => v.classList.remove('active'));
-                    document.getElementById(module + '-module').classList.add('active');
-                    
-                    loadModuleData(module);
+                    const moduleElement = document.getElementById(module + '-module');
+                    if (moduleElement) {
+                        moduleElement.classList.add('active');
+                        loadModuleData(module);
+                    } else {
+                        console.error('Module element not found:', module + '-module');
+                        console.log('Available modules:', Array.from(document.querySelectorAll('.module-view')).map(m => m.id));
+                    }
                 });
             });
 
@@ -1372,6 +1391,9 @@
                     break;
                 case 'audio':
                     loadAudioData();
+                    break;
+                case 'users':
+                    loadUsersData();
                     break;
             }
         }
@@ -2625,6 +2647,265 @@
                         document.getElementById('dateCoverage').textContent = days;
                     }
                 });
+        }
+
+        // USER MANAGEMENT MODULE
+        function loadUsersData() {
+            console.log('Loading users data...');
+            const container = document.getElementById('usersContainer');
+            if (!container) {
+                console.error('usersContainer not found!');
+                return;
+            }
+            
+            container.innerHTML = '<div class="loading"><div class="spinner"></div> Loading users...</div>';
+            
+            fetch('/api/users', {
+                credentials: 'include'
+            })
+                .then(res => {
+                    console.log('Users API response status:', res.status);
+                    if (res.status === 401) {
+                        window.location.href = '/login';
+                        return null;
+                    }
+                    if (res.status === 403) {
+                        container.innerHTML = '<div style="padding: 20px; background: #f8d7da; color: #721c24; border-radius: 4px; margin: 20px;">Access denied. Dachido admin required.</div>';
+                        return null;
+                    }
+                    if (!res.ok) {
+                        throw new Error(`HTTP error! status: ${res.status}`);
+                    }
+                    return res.json();
+                })
+                .then(data => {
+                    if (!data) return;
+                    console.log('Users data received:', data);
+                    window.usersList = data.users || [];
+                    renderUsersTable(window.usersList);
+                })
+                .catch(error => {
+                    console.error('Error loading users:', error);
+                    container.innerHTML = '<div style="padding: 20px; background: #f8d7da; color: #721c24; border-radius: 4px; margin: 20px;">Error loading users: ' + error.message + '</div>';
+                });
+        }
+
+        function renderUsersTable(users) {
+            const container = document.getElementById('usersContainer');
+            if (!container) {
+                console.error('usersContainer not found in renderUsersTable!');
+                return;
+            }
+            
+            console.log('Rendering users table with', users.length, 'users');
+            
+            if (users.length === 0) {
+                container.innerHTML = '<div style="text-align: center; padding: 40px; color: #666;">No users found.</div>';
+                return;
+            }
+            
+            let html = `
+                <div style="margin-bottom: 20px;">
+                    <button onclick="showAddUserForm()" class="btn-primary" style="padding: 10px 20px; background: var(--primary-green); color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: 600;">+ Add User</button>
+                </div>
+                <div id="userMessage" style="margin-bottom: 15px;"></div>
+                <div id="addUserForm" style="display: none; background: #f8f9fa; padding: 20px; border-radius: 5px; margin-bottom: 20px;">
+                    <h3 style="margin-bottom: 15px;">Add New User</h3>
+                    <form id="createUserForm" style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
+                        <div>
+                            <label style="display: block; margin-bottom: 5px; font-weight: 500;">Organization *</label>
+                            <input type="text" id="new_organization" required placeholder="e.g., coromandel" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
+                        </div>
+                        <div>
+                            <label style="display: block; margin-bottom: 5px; font-weight: 500;">Username *</label>
+                            <input type="text" id="new_username" required style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
+                        </div>
+                        <div>
+                            <label style="display: block; margin-bottom: 5px; font-weight: 500;">Password *</label>
+                            <input type="password" id="new_password" required style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
+                        </div>
+                        <div>
+                            <label style="display: block; margin-bottom: 5px; font-weight: 500;">Role *</label>
+                            <select id="new_role" required style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
+                                <option value="customer_admin">Customer Admin</option>
+                                <option value="admin">Admin</option>
+                                <option value="dachido_admin">Dachido Admin</option>
+                            </select>
+                        </div>
+                        <div style="grid-column: 1 / -1;">
+                            <label style="display: block; margin-bottom: 5px; font-weight: 500;">Email (Optional)</label>
+                            <input type="email" id="new_email" placeholder="user@example.com" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
+                        </div>
+                        <div style="grid-column: 1 / -1; display: flex; gap: 10px;">
+                            <button type="submit" style="padding: 10px 20px; background: var(--primary-green); color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: 600;">Create User</button>
+                            <button type="button" onclick="hideAddUserForm()" style="padding: 10px 20px; background: #6c757d; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: 600;">Cancel</button>
+                        </div>
+                    </form>
+                </div>
+                <table class="position-table" style="width: 100%;">
+                    <thead>
+                        <tr>
+                            <th>Organization</th>
+                            <th>Username</th>
+                            <th>Role</th>
+                            <th>Created</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="usersTableBody">
+            `;
+            
+            users.forEach(user => {
+                const roleBadge = user.role === 'dachido_admin' ? '<span style="background: #dc3545; color: white; padding: 4px 8px; border-radius: 3px; font-size: 12px;">Dachido Admin</span>' :
+                               user.role === 'admin' ? '<span style="background: #ffc107; color: #000; padding: 4px 8px; border-radius: 3px; font-size: 12px;">Admin</span>' :
+                               '<span style="background: #28a745; color: white; padding: 4px 8px; border-radius: 3px; font-size: 12px;">Customer Admin</span>';
+                const createdDate = user.created_at ? new Date(user.created_at).toLocaleDateString() : 'N/A';
+                
+                html += `
+                    <tr>
+                        <td>${user.organization_display || user.organization}</td>
+                        <td>${user.username}</td>
+                        <td>${roleBadge}</td>
+                        <td>${createdDate}</td>
+                        <td>
+                            <button onclick="editUser('${user.key.replace(/'/g, "\\'")}')" style="padding: 5px 10px; background: var(--primary-green); color: white; border: none; border-radius: 3px; cursor: pointer; margin-right: 5px; font-size: 12px;">Edit</button>
+                            <button onclick="deleteUser('${user.key.replace(/'/g, "\\'")}')" style="padding: 5px 10px; background: #dc3545; color: white; border: none; border-radius: 3px; cursor: pointer; font-size: 12px;">Delete</button>
+                        </td>
+                    </tr>
+                `;
+            });
+            
+            html += '</tbody></table>';
+            container.innerHTML = html;
+            
+            // Attach form handler
+            const form = document.getElementById('createUserForm');
+            if (form) {
+                form.addEventListener('submit', handleCreateUser);
+            }
+        }
+
+        function showAddUserForm() {
+            document.getElementById('addUserForm').style.display = 'block';
+            document.getElementById('createUserForm').reset();
+        }
+
+        function hideAddUserForm() {
+            document.getElementById('addUserForm').style.display = 'none';
+        }
+
+        async function handleCreateUser(e) {
+            e.preventDefault();
+            
+            const data = {
+                organization: document.getElementById('new_organization').value.trim().toLowerCase(),
+                username: document.getElementById('new_username').value.trim(),
+                password: document.getElementById('new_password').value,
+                role: document.getElementById('new_role').value,
+                email: document.getElementById('new_email').value.trim() || undefined
+            };
+            
+            try {
+                const response = await fetch('/api/users', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'include',
+                    body: JSON.stringify(data)
+                });
+                
+                const result = await response.json();
+                
+                if (response.ok) {
+                    showUserMessage('User created successfully!', 'success');
+                    hideAddUserForm();
+                    loadUsersData();
+                } else {
+                    showUserMessage('Error: ' + (result.error || 'Failed to create user'), 'error');
+                }
+            } catch (error) {
+                showUserMessage('Error: ' + error.message, 'error');
+            }
+        }
+
+        function editUser(userKey) {
+            const user = window.usersList?.find(u => u.key === userKey);
+            if (!user) {
+                showUserMessage('User not found', 'error');
+                return;
+            }
+            
+            const newRole = prompt('Enter new role (admin, customer_admin, dachido_admin):', user.role);
+            if (!newRole) return;
+            
+            if (!['admin', 'customer_admin', 'dachido_admin'].includes(newRole)) {
+                showUserMessage('Invalid role', 'error');
+                return;
+            }
+            
+            const newPassword = prompt('Enter new password (leave blank to keep current):', '');
+            const newEmail = prompt('Enter email (leave blank to keep current):', user.email || '');
+            
+            const data = { role: newRole };
+            if (newPassword) data.password = newPassword;
+            if (newEmail) data.email = newEmail;
+            
+            fetch(`/api/users/${encodeURIComponent(userKey)}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                credentials: 'include',
+                body: JSON.stringify(data)
+            })
+                .then(res => res.json())
+                .then(result => {
+                    if (result.success) {
+                        showUserMessage('User updated successfully!', 'success');
+                        loadUsersData();
+                    } else {
+                        showUserMessage('Error: ' + (result.error || 'Failed to update user'), 'error');
+                    }
+                })
+                .catch(error => {
+                    showUserMessage('Error: ' + error.message, 'error');
+                });
+        }
+
+        async function deleteUser(userKey) {
+            if (!confirm('Are you sure you want to delete this user? This action cannot be undone.')) {
+                return;
+            }
+            
+            try {
+                const response = await fetch(`/api/users/${encodeURIComponent(userKey)}`, {
+                    method: 'DELETE',
+                    credentials: 'include'
+                });
+                
+                const result = await response.json();
+                
+                if (response.ok) {
+                    showUserMessage('User deleted successfully!', 'success');
+                    loadUsersData();
+                } else {
+                    showUserMessage('Error: ' + (result.error || 'Failed to delete user'), 'error');
+                }
+            } catch (error) {
+                showUserMessage('Error: ' + error.message, 'error');
+            }
+        }
+
+        function showUserMessage(text, type) {
+            const messageDiv = document.getElementById('userMessage');
+            messageDiv.style.display = 'block';
+            messageDiv.style.padding = '10px';
+            messageDiv.style.borderRadius = '4px';
+            messageDiv.style.marginBottom = '15px';
+            messageDiv.style.backgroundColor = type === 'success' ? '#d4edda' : '#f8d7da';
+            messageDiv.style.color = type === 'success' ? '#155724' : '#721c24';
+            messageDiv.textContent = text;
+            
+            setTimeout(() => {
+                messageDiv.style.display = 'none';
+            }, 5000);
         }
 
         // LIBRARY MODULE
