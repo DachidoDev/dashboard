@@ -4,6 +4,7 @@ Supports organization-based user management and Dachido admin access
 """
 import json
 import os
+import re
 import jwt
 from datetime import datetime, timedelta
 from functools import wraps
@@ -13,11 +14,39 @@ from flask_bcrypt import Bcrypt
 # Bcrypt will be initialized by the Flask app
 bcrypt = Bcrypt()
 
+# Email validation regex pattern
+EMAIL_PATTERN = re.compile(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,7}")
+
+# Use storage_manager for file operations (blob storage or local)
+try:
+    from storage_manager import load_json_file, save_json_file
+    USE_BLOB_STORAGE = bool(os.environ.get("AZURE_STORAGE_CONNECTION_STRING"))
+except ImportError:
+    # Fallback if storage_manager not available
+    USE_BLOB_STORAGE = False
+    def load_json_file(filename):
+        file_path = f"/home/site/data/{filename}" if os.environ.get("WEBSITE_INSTANCE_ID") else filename
+        file_dir = os.path.dirname(file_path)
+        if file_dir and not os.path.exists(file_dir):
+            os.makedirs(file_dir, exist_ok=True)
+        if not os.path.exists(file_path):
+            with open(file_path, 'w') as f:
+                json.dump({}, f)
+            return {}
+        with open(file_path, 'r') as f:
+            return json.load(f)
+    
+    def save_json_file(filename, data):
+        file_path = f"/home/site/data/{filename}" if os.environ.get("WEBSITE_INSTANCE_ID") else filename
+        file_dir = os.path.dirname(file_path)
+        if file_dir and not os.path.exists(file_dir):
+            os.makedirs(file_dir, exist_ok=True)
+        with open(file_path, 'w') as f:
+            json.dump(data, f, indent=4)
+        return True
+
 USERS_FILE = "users.json"
 ORGANIZATIONS_FILE = "organizations.json"
-if os.environ.get("WEBSITE_INSTANCE_ID"):  # Running on Azure
-    USERS_FILE = "/home/site/data/users.json"
-    ORGANIZATIONS_FILE = "/home/site/data/organizations.json"
 
 # JWT Configuration
 JWT_SECRET_KEY = os.environ.get("JWT_SECRET_KEY", "your_super_secret_jwt_key_change_in_production")
@@ -29,43 +58,23 @@ DACHIDO_ORG = "dachido"
 
 
 def load_users():
-    """Load users from JSON file"""
-    # Ensure directory exists (for Azure deployment)
-    users_dir = os.path.dirname(USERS_FILE)
-    if users_dir and not os.path.exists(users_dir):
-        os.makedirs(users_dir, exist_ok=True)
-    
-    if not os.path.exists(USERS_FILE):
-        with open(USERS_FILE, "w") as f:
-            json.dump({}, f)
-    with open(USERS_FILE, "r") as f:
-        return json.load(f)
+    """Load users from JSON file (blob storage or local)"""
+    return load_json_file(USERS_FILE)
 
 
 def save_users(users):
-    """Save users to JSON file"""
-    with open(USERS_FILE, "w") as f:
-        json.dump(users, f, indent=4)
+    """Save users to JSON file (blob storage or local)"""
+    save_json_file(USERS_FILE, users)
 
 
 def load_organizations():
-    """Load organizations from JSON file"""
-    # Ensure directory exists (for Azure deployment)
-    orgs_dir = os.path.dirname(ORGANIZATIONS_FILE)
-    if orgs_dir and not os.path.exists(orgs_dir):
-        os.makedirs(orgs_dir, exist_ok=True)
-    
-    if not os.path.exists(ORGANIZATIONS_FILE):
-        with open(ORGANIZATIONS_FILE, "w") as f:
-            json.dump({}, f)
-    with open(ORGANIZATIONS_FILE, "r") as f:
-        return json.load(f)
+    """Load organizations from JSON file (blob storage or local)"""
+    return load_json_file(ORGANIZATIONS_FILE)
 
 
 def save_organizations(organizations):
-    """Save organizations to JSON file"""
-    with open(ORGANIZATIONS_FILE, "w") as f:
-        json.dump(organizations, f, indent=4)
+    """Save organizations to JSON file (blob storage or local)"""
+    save_json_file(ORGANIZATIONS_FILE, organizations)
 
 
 def add_organization(org_name, display_name=None, metadata=None):
@@ -92,10 +101,11 @@ def get_organization(org_name):
     return organizations.get(org_name)
 
 
-def add_user(organization, username, password, role="customer_admin"):
+def add_user(organization, username, password, role="customer_admin", email=None):
     """
     Add a new user with organization and role
     role can be: 'dachido_admin', 'admin', or 'customer_admin'
+    email: Optional email address (validated with regex)
     """
     users = load_users()
     user_key = f"{organization}:{username}"
@@ -103,14 +113,23 @@ def add_user(organization, username, password, role="customer_admin"):
     if user_key in users:
         return False  # User already exists
     
+    # Validate email if provided
+    if email and not EMAIL_PATTERN.match(email):
+        raise ValueError(f"Invalid email format: {email}")
+    
     hashed_password = bcrypt.generate_password_hash(password).decode("utf-8")
-    users[user_key] = {
+    user_data = {
         "password": hashed_password,
         "role": role,
         "organization": organization,
         "username": username,
         "created_at": datetime.now().isoformat()
     }
+    
+    if email:
+        user_data["email"] = email
+    
+    users[user_key] = user_data
     save_users(users)
     return True
 

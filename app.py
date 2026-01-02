@@ -2100,6 +2100,7 @@ def create_user():
     username = data.get("username", "").strip()
     password = data.get("password", "")
     role = data.get("role", "customer_admin")
+    email = data.get("email", "").strip() if data.get("email") else None
     
     if not organization or not username or not password:
         return jsonify({"error": "Organization, username, and password are required"}), 400
@@ -2107,13 +2108,23 @@ def create_user():
     if role not in ["admin", "customer_admin", "dachido_admin"]:
         return jsonify({"error": "Invalid role"}), 400
     
+    # Validate email if provided
+    if email:
+        import re
+        email_pattern = r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,7}"
+        if not re.match(email_pattern, email):
+            return jsonify({"error": "Invalid email format"}), 400
+    
     # Create organization if it doesn't exist
     auth.add_organization(organization)
     
-    if auth.add_user(organization, username, password, role):
-        return jsonify({"success": True, "message": "User created successfully"}), 201
-    else:
-        return jsonify({"error": "User already exists"}), 409
+    try:
+        if auth.add_user(organization, username, password, role, email=email):
+            return jsonify({"success": True, "message": "User created successfully"}), 201
+        else:
+            return jsonify({"error": "User already exists"}), 409
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 400
 
 
 @app.route("/api/users/<path:user_key>", methods=["PUT"])
@@ -2146,7 +2157,13 @@ def update_user(user_key):
     
     # Update email if provided
     if "email" in data:
-        user_data["email"] = data["email"]
+        email = data["email"].strip() if data.get("email") else None
+        if email:
+            import re
+            email_pattern = r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,7}"
+            if not re.match(email_pattern, email):
+                return jsonify({"error": "Invalid email format"}), 400
+        user_data["email"] = email
     
     users[user_key] = user_data
     auth.save_users(users)

@@ -6,7 +6,11 @@ with organization and role information.
 
 import os
 import json
+import re
 from flask import request
+
+# File name constant
+USER_MAPPINGS_FILE_NAME = "user_mappings.json"
 
 # Easy Auth headers that Azure injects
 EASY_AUTH_HEADERS = {
@@ -37,7 +41,12 @@ def get_easy_auth_user():
     provider = request.headers.get(EASY_AUTH_HEADERS['provider'], 'unknown')
     
     # Try to extract email from user_name (common for Microsoft Entra)
-    email = user_name if '@' in str(user_name) else None
+    # Validate email using regex pattern
+    email = None
+    if user_name and '@' in str(user_name):
+        email_pattern = r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,7}"
+        if re.match(email_pattern, user_name):
+            email = user_name
     
     return user_id, user_name, provider, email
 
@@ -63,29 +72,40 @@ def get_easy_auth_claims():
 
 def map_easy_auth_to_organization(easy_auth_user_id, easy_auth_email=None):
     """
-    Map Easy Auth user identity to organization and role
+    Map Easy Auth user identity to organization and role (backward compatibility)
     Uses user_mappings.json to store mappings
+    
+    Note: New implementation prefers username format: <organization>/<username>
+    This function is kept for backward compatibility with existing mappings.
     
     Returns (organization, role, username) or (None, None, None)
     """
     # Import here to avoid circular import
     from auth import load_users
     
-    MAPPINGS_FILE = "user_mappings.json"
-    if os.environ.get("WEBSITE_INSTANCE_ID"):  # Running on Azure
-        MAPPINGS_FILE = "/home/site/data/user_mappings.json"
+    # Validate email if provided
+    if easy_auth_email and not re.match(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,7}", easy_auth_email):
+        easy_auth_email = None  # Invalid email, don't use for mapping
     
-    # Ensure directory exists
-    mappings_dir = os.path.dirname(MAPPINGS_FILE)
-    if mappings_dir and not os.path.exists(mappings_dir):
-        os.makedirs(mappings_dir, exist_ok=True)
-    
-    # Load mappings
-    if os.path.exists(MAPPINGS_FILE):
-        with open(MAPPINGS_FILE, 'r') as f:
-            mappings = json.load(f)
-    else:
-        mappings = {}
+    # Use storage_manager for blob storage or local filesystem
+    try:
+        from storage_manager import load_json_file
+        mappings = load_json_file(USER_MAPPINGS_FILE_NAME)
+    except ImportError:
+        # Fallback to local filesystem
+        MAPPINGS_FILE = "user_mappings.json"
+        if os.environ.get("WEBSITE_INSTANCE_ID"):
+            MAPPINGS_FILE = "/home/site/data/user_mappings.json"
+        
+        mappings_dir = os.path.dirname(MAPPINGS_FILE)
+        if mappings_dir and not os.path.exists(mappings_dir):
+            os.makedirs(mappings_dir, exist_ok=True)
+        
+        if os.path.exists(MAPPINGS_FILE):
+            with open(MAPPINGS_FILE, 'r') as f:
+                mappings = json.load(f)
+        else:
+            mappings = {}
     
     # Look up user by Easy Auth ID or email
     user_id_key = f"easy_auth_id:{easy_auth_user_id}"
@@ -121,8 +141,21 @@ def map_easy_auth_to_organization(easy_auth_user_id, easy_auth_email=None):
                             mappings[user_id_key] = mapping
                             if email_key:
                                 mappings[email_key] = mapping
-                            with open(MAPPINGS_FILE, 'w') as f:
-                                json.dump(mappings, f, indent=4)
+                            
+                            # Save to blob storage or local filesystem
+                            try:
+                                from storage_manager import save_json_file
+                                save_json_file(USER_MAPPINGS_FILE_NAME, mappings)
+                            except ImportError:
+                                # Fallback to local filesystem
+                                MAPPINGS_FILE = "user_mappings.json"
+                                if os.environ.get("WEBSITE_INSTANCE_ID"):
+                                    MAPPINGS_FILE = "/home/site/data/user_mappings.json"
+                                mappings_dir = os.path.dirname(MAPPINGS_FILE)
+                                if mappings_dir and not os.path.exists(mappings_dir):
+                                    os.makedirs(mappings_dir, exist_ok=True)
+                                with open(MAPPINGS_FILE, 'w') as f:
+                                    json.dump(mappings, f, indent=4)
                             break
     
     if mapping:
@@ -134,22 +167,32 @@ def map_easy_auth_to_organization(easy_auth_user_id, easy_auth_email=None):
 def create_user_mapping(easy_auth_user_id, easy_auth_email, organization, username, role):
     """
     Create a mapping between Easy Auth identity and organization/role
+    Note: This is now mainly for backward compatibility.
+    New users should use username format: <organization>/<username>
     """
-    MAPPINGS_FILE = "user_mappings.json"
-    if os.environ.get("WEBSITE_INSTANCE_ID"):  # Running on Azure
-        MAPPINGS_FILE = "/home/site/data/user_mappings.json"
+    # Validate email if provided
+    if easy_auth_email and not re.match(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,7}", easy_auth_email):
+        raise ValueError(f"Invalid email format: {easy_auth_email}")
     
-    # Ensure directory exists
-    mappings_dir = os.path.dirname(MAPPINGS_FILE)
-    if mappings_dir and not os.path.exists(mappings_dir):
-        os.makedirs(mappings_dir, exist_ok=True)
-    
-    # Load mappings
-    if os.path.exists(MAPPINGS_FILE):
-        with open(MAPPINGS_FILE, 'r') as f:
-            mappings = json.load(f)
-    else:
-        mappings = {}
+    # Use storage_manager for blob storage or local filesystem
+    try:
+        from storage_manager import load_json_file, save_json_file
+        mappings = load_json_file(USER_MAPPINGS_FILE_NAME)
+    except ImportError:
+        # Fallback to local filesystem
+        MAPPINGS_FILE = "user_mappings.json"
+        if os.environ.get("WEBSITE_INSTANCE_ID"):
+            MAPPINGS_FILE = "/home/site/data/user_mappings.json"
+        
+        mappings_dir = os.path.dirname(MAPPINGS_FILE)
+        if mappings_dir and not os.path.exists(mappings_dir):
+            os.makedirs(mappings_dir, exist_ok=True)
+        
+        if os.path.exists(MAPPINGS_FILE):
+            with open(MAPPINGS_FILE, 'r') as f:
+                mappings = json.load(f)
+        else:
+            mappings = {}
     
     # Create mapping entries
     user_id_key = f"easy_auth_id:{easy_auth_user_id}"
@@ -167,16 +210,28 @@ def create_user_mapping(easy_auth_user_id, easy_auth_email, organization, userna
     if email_key:
         mappings[email_key] = mapping
     
-    # Save mappings
-    with open(MAPPINGS_FILE, 'w') as f:
-        json.dump(mappings, f, indent=4)
+    # Save mappings to blob storage or local filesystem
+    try:
+        from storage_manager import save_json_file
+        save_json_file(USER_MAPPINGS_FILE_NAME, mappings)
+    except ImportError:
+        # Fallback to local filesystem
+        MAPPINGS_FILE = "user_mappings.json"
+        if os.environ.get("WEBSITE_INSTANCE_ID"):
+            MAPPINGS_FILE = "/home/site/data/user_mappings.json"
+        mappings_dir = os.path.dirname(MAPPINGS_FILE)
+        if mappings_dir and not os.path.exists(mappings_dir):
+            os.makedirs(mappings_dir, exist_ok=True)
+        with open(MAPPINGS_FILE, 'w') as f:
+            json.dump(mappings, f, indent=4)
     
     return True
 
 
 def get_user_from_easy_auth():
     """
-    Get user information from Easy Auth and map to organization/role
+    Get user information from Easy Auth and extract organization from username format
+    Username format: <organization>/<username> (e.g., "coromandel/john.doe")
     Returns (username, organization, role) or (None, None, None)
     """
     if not is_easy_auth_enabled():
@@ -187,13 +242,36 @@ def get_user_from_easy_auth():
     if not easy_auth_user_id:
         return None, None, None
     
-    # Map Easy Auth user to organization/role
+    # Extract organization from username format: <organization>/<username>
+    # If username contains '/', split it to get organization and username
+    if easy_auth_user_name and '/' in str(easy_auth_user_name):
+        parts = str(easy_auth_user_name).split('/', 1)  # Split on first '/' only
+        if len(parts) == 2:
+            organization = parts[0].strip().lower()
+            username = parts[1].strip()
+            
+            # Look up role from users.json using organization:username format
+            from auth import load_users, get_user_role
+            users = load_users()
+            user_key = f"{organization}:{username}"
+            
+            if user_key in users:
+                user_data = users[user_key]
+                if isinstance(user_data, dict):
+                    role = user_data.get('role', 'customer_admin')
+                else:
+                    role = get_user_role(organization, username) or 'customer_admin'
+                
+                return username, organization, role
+    
+    # Fallback: Try mapping system (for backward compatibility)
+    # This handles cases where username is just email or doesn't have org prefix
     organization, role, username = map_easy_auth_to_organization(easy_auth_user_id, email or easy_auth_user_name)
     
     if organization and role:
         return username or easy_auth_user_name, organization, role
     
-    # If no mapping exists, return None (user needs to be mapped first)
+    # If no organization found, return None
     return None, None, None
 
 
