@@ -1855,47 +1855,9 @@ def debug_companies():
 @app.route("/login", methods=["GET", "POST"])
 def login():
     """
-    Login route - supports both Easy Auth and local authentication
-    If Easy Auth is enabled, redirects to Easy Auth login
-    Otherwise, uses local username/password authentication
+    Login route - local username/password authentication only
+    Azure Easy Auth has been disabled - using local authentication
     """
-    # Check if Easy Auth is enabled
-    # On Azure, always try Easy Auth first (if WEBSITE_INSTANCE_ID is set)
-    # Easy Auth headers only exist AFTER authentication, so we check environment instead
-    is_azure = bool(os.environ.get("WEBSITE_INSTANCE_ID"))
-    
-    if is_azure:
-        # On Azure, check if user is already authenticated via Easy Auth
-        try:
-            from easy_auth import is_easy_auth_enabled
-            
-            if is_easy_auth_enabled():
-                # User is already authenticated via Easy Auth, handle in callback
-                return redirect("/auth/easy-auth-callback")
-            else:
-                # On Azure but not authenticated yet - redirect to Easy Auth login
-                # This will trigger Microsoft login
-                print("🔄 Redirecting to Easy Auth login (Azure environment detected)")
-                return redirect("/.auth/login/aad")  # Microsoft Entra ID
-        except ImportError:
-            # Easy Auth module not available, but we're on Azure - still try redirect
-            print("⚠️  Easy Auth module not available, but on Azure - redirecting anyway")
-            return redirect("/.auth/login/aad")
-        except Exception as e:
-            print(f"⚠️  Easy Auth check error: {e}")
-            # On Azure, still try Easy Auth redirect
-            return redirect("/.auth/login/aad")
-    else:
-        # Local development - check if Easy Auth headers exist (for testing)
-        try:
-            from easy_auth import is_easy_auth_enabled
-            
-            if is_easy_auth_enabled():
-                return redirect("/.auth/login/aad")
-        except ImportError:
-            pass
-        except Exception as e:
-            print(f"⚠️  Easy Auth check error: {e}")
     
     # Local authentication (username/password)
     if request.method == "POST":
@@ -1975,87 +1937,8 @@ def logout():
     return response
 
 
-@app.route("/auth/easy-auth-callback")
-def easy_auth_callback():
-    """
-    Handle Easy Auth callback - generate custom JWT token with organization/role
-    This route is called after Azure Easy Auth authenticates the user
-    """
-    try:
-        from easy_auth import is_easy_auth_enabled, get_easy_auth_user, get_user_from_easy_auth, create_user_mapping
-        
-        if not is_easy_auth_enabled():
-            return redirect(url_for("login"))
-        
-        easy_auth_user_id, easy_auth_user_name, provider, email = get_easy_auth_user()
-        
-        if not easy_auth_user_id:
-            return redirect(url_for("login"))
-        
-        # Try to get user mapping
-        username, organization, role = get_user_from_easy_auth()
-        
-        if not username or not organization:
-            # User not mapped yet - redirect to mapping page
-            return redirect(url_for("map_easy_auth_user", easy_auth_id=easy_auth_user_id))
-        
-        # Generate custom JWT token
-        token = auth.generate_jwt_token(username, organization, role)
-        
-        # Set JWT cookie and redirect to dashboard
-        response = make_response(redirect(url_for("index")))
-        is_production = bool(os.environ.get("WEBSITE_INSTANCE_ID"))
-        response.set_cookie(
-            "auth_token",
-            token,
-            max_age=30 * 60,
-            httponly=True,
-            secure=is_production,
-            samesite="Lax",
-            path="/"
-        )
-        
-        return response
-        
-    except ImportError:
-        # Easy Auth module not available
-        return redirect(url_for("login"))
-    except Exception as e:
-        print(f"⚠️  Easy Auth callback error: {e}")
-        return redirect(url_for("login"))
-
-
-@app.route("/auth/map-user", methods=["GET", "POST"])
-@login_required
-@auth.require_dachido_admin
-def map_easy_auth_user():
-    """
-    Map Easy Auth user to organization/role (Dachido admin only)
-    """
-    easy_auth_id = request.args.get("easy_auth_id")
-    
-    if request.method == "POST":
-        try:
-            from easy_auth import get_easy_auth_user, create_user_mapping
-            
-            easy_auth_user_id, easy_auth_user_name, provider, email = get_easy_auth_user()
-            organization = request.form.get("organization", "").strip().lower()
-            username = request.form.get("username", "").strip()
-            role = request.form.get("role", "customer_admin")
-            
-            if not organization or not username:
-                return render_template("map_user.html", error="Organization and username are required", easy_auth_id=easy_auth_id)
-            
-            # Create mapping
-            create_user_mapping(easy_auth_user_id or easy_auth_id, email or easy_auth_user_name, organization, username, role)
-            
-            return redirect(url_for("manage_users"))
-        except Exception as e:
-            return render_template("map_user.html", error=f"Error: {e}", easy_auth_id=easy_auth_id)
-    
-    # Load organizations for dropdown
-    organizations = auth.load_organizations()
-    return render_template("map_user.html", organizations=organizations, easy_auth_id=easy_auth_id)
+# Easy Auth routes removed - using local authentication only
+# If you need Easy Auth in the future, uncomment these routes
 
 
 ################################################

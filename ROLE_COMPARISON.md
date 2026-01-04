@@ -288,3 +288,4 @@ The main difference is **scope of access**:
 - Admin = Own organization (full access)
 - Customer admin = Own organization (limited access)
 
+

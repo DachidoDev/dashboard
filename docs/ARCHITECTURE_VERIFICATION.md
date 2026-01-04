@@ -238,3 +238,4 @@ The architecture you described is fully implemented:
 
 **The only issue**: Azure is blocking external users before they reach your code. Once Azure allows them through, your mapping and authorization system will work automatically!
 
+

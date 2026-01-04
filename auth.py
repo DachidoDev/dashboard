@@ -209,30 +209,12 @@ def verify_jwt_token(token):
 
 def get_user_from_token():
     """
-    Extract user information from JWT token in cookie or Easy Auth
+    Extract user information from JWT token in cookie
     Returns (username, organization, role) or (None, None, None) if invalid
     
-    Priority:
-    1. Try Easy Auth (if enabled)
-    2. Fall back to JWT token in cookie
+    Note: Azure Easy Auth has been disabled - using local JWT authentication only
     """
-    # Try Easy Auth first (if enabled)
-    try:
-        from easy_auth import is_easy_auth_enabled, get_user_from_easy_auth
-        
-        if is_easy_auth_enabled():
-            username, organization, role = get_user_from_easy_auth()
-            if username and organization:
-                print(f"✅ Easy Auth user: {organization}:{username} (role: {role})")
-                return username, organization, role
-    except ImportError:
-        # easy_auth module not available, continue with JWT
-        pass
-    except Exception as e:
-        print(f"⚠️  Easy Auth error: {e}")
-        # Fall through to JWT token check
-    
-    # Fall back to JWT token in cookie
+    # Use JWT token in cookie (Easy Auth removed)
     token = request.cookies.get("auth_token")
     if not token:
         print("⚠️  No auth_token cookie found in request")

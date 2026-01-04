@@ -140,3 +140,4 @@ https://fieldforce-dashboard.azurewebsites.net/.auth/login/aad/callback
 **Where to configure:**
 - Azure Portal → Microsoft Entra ID → App registrations → Your App → Authentication → Web platform → Redirect URIs
 
+
