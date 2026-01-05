@@ -1882,14 +1882,14 @@ def azure_login():
     Azure AD login route - redirects to Microsoft login
     """
     if not AZURE_AUTH_ENABLED:
-        return render_template("error.html", error="Azure AD authentication is not configured. Please contact administrator."), 500
+        return "<h1>Configuration Error</h1><p>Azure AD authentication is not configured. Please contact administrator.</p>", 500
     
     try:
         login_url = get_login_url()
         return redirect(login_url)
     except Exception as e:
         print(f"⚠️  Error generating login URL: {e}")
-        return render_template("error.html", error=f"Authentication error: {e}"), 500
+        return f"<h1>Authentication Error</h1><p>{str(e)}</p><p>Please contact administrator.</p>", 500
 
 
 @app.route("/auth/callback")
@@ -1907,7 +1907,7 @@ def azure_auth_callback():
     if error:
         error_description = request.args.get("error_description", error)
         print(f"⚠️  Azure AD authentication error: {error} - {error_description}")
-        return render_template("error.html", error=f"Authentication failed: {error_description}"), 400
+        return f"<h1>Authentication Failed</h1><p>{error_description}</p>", 400
     
     if not auth_code:
         return redirect(url_for("azure_login"))
@@ -1917,12 +1917,12 @@ def azure_auth_callback():
         access_token, id_token = get_token_from_code(auth_code)
         
         if not access_token or not id_token:
-            return render_template("error.html", error="Failed to obtain access token"), 500
+            return "<h1>Authentication Error</h1><p>Failed to obtain access token. Please try again.</p>", 500
         
         # Get user information from Microsoft Graph
         user_info = get_user_info_from_token(access_token)
         if not user_info:
-            return render_template("error.html", error="Failed to retrieve user information"), 500
+            return "<h1>Authentication Error</h1><p>Failed to retrieve user information. Please try again.</p>", 500
         
         # Extract app roles from ID token
         azure_roles = get_app_roles_from_token(id_token)
@@ -1977,7 +1977,7 @@ def azure_auth_callback():
         print(f"⚠️  Azure AD callback error: {e}")
         import traceback
         traceback.print_exc()
-        return render_template("error.html", error=f"Authentication error: {str(e)}"), 500
+        return f"<h1>Authentication Error</h1><p>{str(e)}</p><p>Please contact administrator.</p>", 500
 
 
 # Registration route removed - users are now managed in Azure AD

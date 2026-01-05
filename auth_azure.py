@@ -45,8 +45,10 @@ def get_login_url():
     if not msal_app:
         raise ValueError("Azure AD not configured. Set AZURE_CLIENT_ID, AZURE_TENANT_ID, and AZURE_CLIENT_SECRET")
     
+    # MSAL automatically adds 'openid' and 'profile' - don't include them explicitly
+    # Only include custom scopes like 'User.Read' and 'email'
     auth_url = msal_app.get_authorization_request_url(
-        scopes=["User.Read", "email", "openid", "profile"],
+        scopes=["User.Read", "email"],
         redirect_uri=AZURE_REDIRECT_URI
     )
     return auth_url
@@ -57,9 +59,10 @@ def get_token_from_code(auth_code):
     if not msal_app:
         return None
     
+    # MSAL automatically adds 'openid' and 'profile' - don't include them explicitly
     result = msal_app.acquire_token_by_authorization_code(
         code=auth_code,
-        scopes=["User.Read", "email", "openid", "profile"],
+        scopes=["User.Read", "email"],
         redirect_uri=AZURE_REDIRECT_URI
     )
     
