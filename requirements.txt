@@ -6,6 +6,10 @@ Flask-Bcrypt
 PyJWT
 cryptography
 
+# Azure AD Authentication
+msal
+requests
+
 # Azure Storage (for audio monitoring)
 azure-storage-blob
 

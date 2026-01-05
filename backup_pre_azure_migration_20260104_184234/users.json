@@ -1,0 +1,24 @@
+{
+    "demo": "$2b$12$ozBqwco6u2go946qNPTb7e3zJdAjAgHmaqazU4dZEhlz1F2uINPwW",
+    "dachido:admin": {
+        "password": "$2b$12$MGg4XmhRX7g3UKuU072YZODcFGFB8GvpUGLfvyCJp3DELe7NIvOBi",
+        "role": "dachido_admin",
+        "organization": "dachido",
+        "username": "admin",
+        "created_at": "2025-12-22T15:55:52.367605"
+    },
+    "coromandel:customer": {
+        "password": "$2b$12$u2Hk.2qsw3QF/sjbXPIAvuqqMWbvGwyRdDS5.jHWoRIQTYMb44KFW",
+        "role": "customer_admin",
+        "organization": "coromandel",
+        "username": "customer",
+        "created_at": "2025-12-22T15:55:53.321932"
+    },
+    "coromandel:admin": {
+        "password": "$2b$12$/fPoIdcFMaDlABxNz.FKrODICmkSdsrqcCPTf5XoccJkw5TtnN1He",
+        "role": "admin",
+        "organization": "coromandel",
+        "username": "admin",
+        "created_at": "2025-12-30T16:43:52.383611"
+    }
+}

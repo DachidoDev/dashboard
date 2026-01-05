@@ -5,7 +5,6 @@ import sys
 import traceback
 from datetime import datetime, timedelta
 from functools import wraps
-import auth
 
 # Import audio monitor
 sys.path.append(os.path.join(os.path.dirname(__file__), '..', 'backend'))
@@ -33,7 +32,6 @@ except ImportError as e:
 from urllib.parse import urlencode
 
 from flask import Flask, jsonify, redirect, render_template, request, session, url_for, make_response, g
-from flask_bcrypt import Bcrypt
 
 app = Flask(__name__)
 
@@ -41,13 +39,33 @@ app = Flask(__name__)
 def favicon():
     return '', 204  # Return empty response with No Content status
 app.config["SECRET_KEY"] = os.environ.get("SECRET_KEY", "your_super_secret_key")
-bcrypt = Bcrypt(app)
 
-# Initialize auth module
-auth.init_auth(app)
+# Import Azure AD authentication
+try:
+    from auth_azure import (
+        require_auth, require_role, require_dachido_admin,
+        get_user_from_token, is_dachido_admin,
+        get_login_url, get_token_from_code, get_user_info_from_token,
+        get_app_roles_from_token, map_role_to_organization_and_role,
+        extract_organization_from_email, generate_jwt_token
+    )
+    AZURE_AUTH_ENABLED = True
+    print("✅ Azure AD authentication enabled")
+except ImportError as e:
+    AZURE_AUTH_ENABLED = False
+    print(f"⚠️  Azure AD authentication not available: {e}")
+    # Fallback decorators (will fail if used)
+    def require_auth(f):
+        @wraps(f)
+        def decorated_function(*args, **kwargs):
+            return jsonify({"error": "Azure AD authentication not configured"}), 500
+        return decorated_function
+    
+    def require_dachido_admin(f):
+        return require_auth(f)
 
-# Import login_required decorator from auth module
-from auth import login_required
+# Use Azure AD login_required as the main decorator
+login_required = require_auth
 
 
 #######################################################
@@ -1852,88 +1870,125 @@ def debug_companies():
 
 ################################################
 # User management routes
-@app.route("/login", methods=["GET", "POST"])
-def login():
+@app.route("/login")
+def azure_login():
     """
-    Login route - local username/password authentication only
-    Azure Easy Auth has been disabled - using local authentication
+    Azure AD login route - redirects to Microsoft login
     """
+    if not AZURE_AUTH_ENABLED:
+        return render_template("error.html", error="Azure AD authentication is not configured. Please contact administrator."), 500
     
-    # Local authentication (username/password)
-    if request.method == "POST":
-        organization = request.form.get("organization", "").strip().lower()
-        username = request.form.get("username", "").strip()
-        password = request.form.get("password", "")
-        
-        if not organization or not username or not password:
-            return render_template("login.html", error="Organization, username, and password are required")
-        
-        success, role, org = auth.check_password(organization, username, password)
-        if success:
-            # Generate JWT token
-            token = auth.generate_jwt_token(username, org, role)
-            print(f"✅ Login successful: {org}:{username} (role: {role})")
-            print(f"✅ JWT token generated: {token[:50]}...")  # Debug: show first 50 chars
-            
-            # Create response with redirect
-            response = make_response(redirect(url_for("index")))
-            
-            # Determine if we're in production (for secure cookie)
-            # For localhost/development, secure=False allows cookies over HTTP
-            # Azure sets WEBSITE_INSTANCE_ID automatically, so we can use it to detect production/staging
-            is_production = bool(os.environ.get("WEBSITE_INSTANCE_ID"))
-            is_secure = is_production  # In Azure (production/staging), always use secure cookies
-            print(f"✅ Setting cookie - Production: {is_production}, Secure: {is_secure}, Host: {request.host}")
-            
-            # Set JWT token as HTTP-only cookie (30 minutes expiration)
-            response.set_cookie(
-                "auth_token",
-                token,
-                max_age=30 * 60,  # 30 minutes in seconds
-                httponly=True,
-                secure=is_secure,  # HTTPS only in production (not on localhost)
-                samesite="Lax",
-                path="/"  # Explicitly set path to root
-            )
-            
-            print(f"✅ Cookie 'auth_token' set successfully")
-            return response
-        else:
-            return render_template("login.html", error="Invalid Organization, Username, or Password")
-    return render_template("login.html")
+    try:
+        login_url = get_login_url()
+        return redirect(login_url)
+    except Exception as e:
+        print(f"⚠️  Error generating login URL: {e}")
+        return render_template("error.html", error=f"Authentication error: {e}"), 500
 
 
-@app.route("/register", methods=["GET", "POST"])
-def register():
-    """Registration route - only for Dachido admins to create new users"""
-    if request.method == "POST":
-        organization = request.form.get("organization", "").strip().lower()
-        username = request.form.get("username", "").strip()
-        password = request.form.get("password", "")
-        role = request.form.get("role", "customer_admin")
+@app.route("/auth/callback")
+def azure_auth_callback():
+    """
+    Azure AD OAuth callback - handles authentication response
+    """
+    if not AZURE_AUTH_ENABLED:
+        return redirect(url_for("azure_login"))
+    
+    # Get authorization code from query parameters
+    auth_code = request.args.get("code")
+    error = request.args.get("error")
+    
+    if error:
+        error_description = request.args.get("error_description", error)
+        print(f"⚠️  Azure AD authentication error: {error} - {error_description}")
+        return render_template("error.html", error=f"Authentication failed: {error_description}"), 400
+    
+    if not auth_code:
+        return redirect(url_for("azure_login"))
+    
+    try:
+        # Exchange code for tokens
+        access_token, id_token = get_token_from_code(auth_code)
         
-        if not organization or not username or not password:
-            return render_template("register.html", error="Organization, username, and password are required")
+        if not access_token or not id_token:
+            return render_template("error.html", error="Failed to obtain access token"), 500
         
-        # Only allow admin/customer_admin roles (dachido_admin must be created manually)
-        if role not in ["admin", "customer_admin"]:
+        # Get user information from Microsoft Graph
+        user_info = get_user_info_from_token(access_token)
+        if not user_info:
+            return render_template("error.html", error="Failed to retrieve user information"), 500
+        
+        # Extract app roles from ID token
+        azure_roles = get_app_roles_from_token(id_token)
+        
+        # Map Azure roles to our organization/role system
+        organization, role, _ = map_role_to_organization_and_role(azure_roles)
+        
+        # If organization not determined from role, extract from email
+        if not organization:
+            email = user_info.get("mail") or user_info.get("userPrincipalName")
+            organization = extract_organization_from_email(email)
+        
+        # If still no organization, use email domain as fallback
+        if not organization:
+            email = user_info.get("mail") or user_info.get("userPrincipalName")
+            if email:
+                organization = extract_organization_from_email(email)
+        
+        # Get username from user info
+        username = user_info.get("mail") or user_info.get("userPrincipalName") or user_info.get("displayName", "").replace(" ", ".")
+        
+        # If no role found, default to customer_admin
+        if not role:
             role = "customer_admin"
         
-        # Create organization if it doesn't exist
-        auth.add_organization(organization)
+        # If no organization found, use email domain
+        if not organization:
+            email = user_info.get("mail") or user_info.get("userPrincipalName")
+            organization = extract_organization_from_email(email) or "default"
         
-        if auth.add_user(organization, username, password, role):
-            return redirect(url_for("login"))
-        else:
-            return render_template("register.html", error="User already exists")
-    return render_template("register.html")
+        print(f"✅ Azure AD login successful: {organization}:{username} (role: {role})")
+        
+        # Generate JWT token
+        token = generate_jwt_token(username, organization, role)
+        
+        # Set JWT cookie and redirect to dashboard
+        response = make_response(redirect(url_for("index")))
+        is_production = bool(os.environ.get("WEBSITE_INSTANCE_ID"))
+        response.set_cookie(
+            "auth_token",
+            token,
+            max_age=8 * 60 * 60,  # 8 hours
+            httponly=True,
+            secure=is_production,
+            samesite="Lax",
+            path="/"
+        )
+        
+        return response
+        
+    except Exception as e:
+        print(f"⚠️  Azure AD callback error: {e}")
+        import traceback
+        traceback.print_exc()
+        return render_template("error.html", error=f"Authentication error: {str(e)}"), 500
+
+
+# Registration route removed - users are now managed in Azure AD
+# To add users: Azure AD → Enterprise applications → Your app → Users and groups
 
 
 @app.route("/logout")
 def logout():
-    """Logout by clearing JWT cookie"""
-    response = make_response(redirect(url_for("login")))
+    """Logout by clearing JWT cookie and redirecting to Azure AD logout"""
+    response = make_response(redirect(url_for("azure_login")))
     response.set_cookie("auth_token", "", expires=0)
+    
+    # Optional: Redirect to Azure AD logout endpoint for complete sign-out
+    # Uncomment if you want users to be signed out of Microsoft as well
+    # azure_logout_url = f"https://login.microsoftonline.com/{AZURE_TENANT_ID}/oauth2/v2.0/logout?post_logout_redirect_uri={request.url_root}"
+    # return redirect(azure_logout_url)
+    
     return response
 
 
