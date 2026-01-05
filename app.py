@@ -67,6 +67,12 @@ except ImportError as e:
 # Use Azure AD login_required as the main decorator
 login_required = require_auth
 
+# Import auth module for organization management functions (still needed for organizations.json)
+import auth
+
+# Import auth module for organization management functions (still needed for organizations.json)
+import auth
+
 
 #######################################################
 # Database configuration
@@ -2002,7 +2008,7 @@ def logout():
 
 @app.route("/api/users", methods=["GET"])
 @login_required
-@auth.require_dachido_admin
+@require_dachido_admin
 def list_users():
     """List all users (Dachido admin only)"""
     users = auth.load_users()
@@ -2030,7 +2036,7 @@ def list_users():
 
 @app.route("/api/users", methods=["POST"])
 @login_required
-@auth.require_dachido_admin
+@require_dachido_admin
 def create_user():
     """Create a new user (Dachido admin only)"""
     data = request.get_json()
@@ -2067,7 +2073,7 @@ def create_user():
 
 @app.route("/api/users/<path:user_key>", methods=["PUT"])
 @login_required
-@auth.require_dachido_admin
+@require_dachido_admin
 def update_user(user_key):
     """Update user (Dachido admin only)"""
     data = request.get_json()
@@ -2111,7 +2117,7 @@ def update_user(user_key):
 
 @app.route("/api/users/<path:user_key>", methods=["DELETE"])
 @login_required
-@auth.require_dachido_admin
+@require_dachido_admin
 def delete_user(user_key):
     """Delete user (Dachido admin only)"""
     users = auth.load_users()
@@ -2132,7 +2138,7 @@ def delete_user(user_key):
 
 @app.route("/admin/users")
 @login_required
-@auth.require_dachido_admin
+@require_dachido_admin
 def manage_users():
     """User management page (Dachido admin only)"""
     return render_template("manage_users.html")
