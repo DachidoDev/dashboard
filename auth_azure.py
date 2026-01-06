@@ -45,31 +45,57 @@ def get_login_url():
     if not msal_app:
         raise ValueError("Azure AD not configured. Set AZURE_CLIENT_ID, AZURE_TENANT_ID, and AZURE_CLIENT_SECRET")
     
-    # MSAL automatically adds 'openid' and 'profile' - don't include them explicitly
-    # Only include custom scopes like 'User.Read' and 'email'
+    # Request User.Read for Graph API and email claim
+    # OpenID Connect scopes (openid, profile, email) are added automatically by MSAL
     auth_url = msal_app.get_authorization_request_url(
-        scopes=["User.Read", "email"],
+        scopes=["User.Read"],  # This will include openid, profile, email automatically
         redirect_uri=AZURE_REDIRECT_URI
     )
     return auth_url
 
 
 def get_token_from_code(auth_code):
-    """Exchange authorization code for access token"""
+    """Exchange authorization code for access token and ID token"""
     if not msal_app:
-        return None
+        return None, None
     
-    # MSAL automatically adds 'openid' and 'profile' - don't include them explicitly
+    # Acquire tokens using authorization code
     result = msal_app.acquire_token_by_authorization_code(
         code=auth_code,
-        scopes=["User.Read", "email"],
+        scopes=["User.Read"],  # Same scopes as login
         redirect_uri=AZURE_REDIRECT_URI
     )
     
     if "access_token" in result:
-        return result["access_token"], result.get("id_token")
+        access_token = result["access_token"]
+        id_token = result.get("id_token")
+        
+        # Debug: Decode and inspect ID token
+        if id_token:
+            try:
+                decoded = jwt.decode(id_token, options={"verify_signature": False})
+                print(f"✅ Token acquired successfully")
+                print(f"🔍 ID Token Claims: {list(decoded.keys())}")
+                print(f"🔍 Has 'roles' claim: {'roles' in decoded}")
+                print(f"🔍 Roles value: {decoded.get('roles', 'NOT FOUND')}")
+                print(f"🔍 User: {decoded.get('email') or decoded.get('preferred_username') or decoded.get('upn')}")
+                print(f"🔍 Name: {decoded.get('name')}")
+                
+                # If no roles, print diagnostic info
+                if 'roles' not in decoded or not decoded.get('roles'):
+                    print("⚠️  WARNING: No roles in ID token!")
+                    print("⚠️  Check the following:")
+                    print("   1. User has app role assigned in Enterprise Application → Users and groups")
+                    print("   2. Wait 5-10 minutes after role assignment for propagation")
+                    print("   3. User must sign out completely and sign back in")
+                    print("   4. Clear browser cache and cookies")
+            except Exception as e:
+                print(f"⚠️  Could not decode ID token for debugging: {e}")
+        
+        return access_token, id_token
     else:
-        print(f"⚠️  Token acquisition error: {result.get('error_description', result.get('error'))}")
+        error = result.get('error_description', result.get('error', 'Unknown error'))
+        print(f"⚠️  Token acquisition error: {error}")
         return None, None
 
 
@@ -84,7 +110,9 @@ def get_user_info_from_token(access_token):
     try:
         response = requests.get(graph_endpoint, headers=headers)
         if response.status_code == 200:
-            return response.json()
+            user_data = response.json()
+            print(f"✅ User info retrieved: {user_data.get('mail') or user_data.get('userPrincipalName')}")
+            return user_data
         else:
             print(f"⚠️  Graph API error: {response.status_code} - {response.text}")
             return None
@@ -94,14 +122,44 @@ def get_user_info_from_token(access_token):
 
 
 def get_app_roles_from_token(id_token):
-    """Extract app roles from ID token"""
+    """
+    Extract app roles from ID token
+    
+    The 'roles' claim is automatically added to the ID token when:
+    1. The user is assigned to an app role in the Enterprise Application
+    2. The app requests the 'openid' scope (which MSAL does by default)
+    """
     try:
-        # Decode token without verification (we'll verify with Azure)
+        # Decode token without verification (Azure AD already verified it)
         decoded = jwt.decode(id_token, options={"verify_signature": False})
+        
+        # Extract roles claim
         roles = decoded.get("roles", [])
+        
+        print(f"🔍 Extracting roles from ID token...")
+        print(f"🔍 Found roles: {roles if roles else 'NONE'}")
+        
+        if not roles:
+            print("⚠️  ========================================")
+            print("⚠️  NO ROLES FOUND IN ID TOKEN!")
+            print("⚠️  ========================================")
+            print("⚠️  This usually means:")
+            print("⚠️  1. User has no app role assignment")
+            print("⚠️     → Go to: Enterprise Application → Users and groups → Assign role")
+            print("⚠️  2. Role assignment hasn't propagated yet")
+            print("⚠️     → Wait 5-10 minutes, then sign out and sign back in")
+            print("⚠️  3. User needs to clear session")
+            print("⚠️     → Sign out from Microsoft completely, clear cookies")
+            print("⚠️  ========================================")
+            
+            # Print all available claims for debugging
+            print(f"🔍 All claims in token: {list(decoded.keys())}")
+        
         return roles
     except Exception as e:
-        print(f"⚠️  Error decoding token: {e}")
+        print(f"❌ Error decoding token: {e}")
+        import traceback
+        traceback.print_exc()
         return []
 
 
@@ -109,42 +167,68 @@ def map_role_to_organization_and_role(azure_roles):
     """
     Map Azure AD app roles to our internal organization and role system
     
-    Azure AD App Roles:
+    Azure AD App Roles (must match "Value" field in App Registration → App roles):
     - dachido_admin → organization: "dachido", role: "dachido_admin"
-    - customer_admin → organization: extracted from email domain or assigned
-    - admin → organization: extracted from email domain or assigned
+    - admin → organization: extracted from email domain
+    - customer_admin → organization: extracted from email domain
     
-    Returns: (organization, role, username)
+    Returns: (organization, role, is_dachido_admin)
     """
+    print(f"🔍 Mapping Azure roles: {azure_roles}")
+    
     if not azure_roles:
-        return None, None, None
+        print("⚠️  No Azure roles to map!")
+        return None, None, False
     
-    # Check for dachido_admin first (highest privilege)
-    if "dachido_admin" in azure_roles:
-        return "dachido", "dachido_admin", None
+    # Take the first role (users should only have one app role assigned)
+    primary_role = azure_roles[0] if isinstance(azure_roles, list) else azure_roles
     
-    # Check for admin
-    if "admin" in azure_roles:
-        # Organization will be determined from email domain or user assignment
-        return None, "admin", None
+    print(f"🔍 Primary role: {primary_role}")
     
-    # Check for customer_admin
-    if "customer_admin" in azure_roles:
-        return None, "customer_admin", None
-    
-    return None, None, None
+    # Map based on role value (these MUST match your App Role "Value" field exactly)
+    if primary_role == "dachido_admin":
+        print("✅ Mapped to: dachido_admin")
+        return "dachido", "dachido_admin", True
+    elif primary_role == "admin":
+        print("✅ Mapped to: admin (organization from email)")
+        return None, "admin", False
+    elif primary_role == "customer_admin":
+        print("✅ Mapped to: customer_admin (organization from email)")
+        return None, "customer_admin", False
+    else:
+        print(f"⚠️  Unknown role: {primary_role}")
+        return None, None, False
 
 
 def extract_organization_from_email(email):
     """
     Extract organization name from email domain
-    Example: user@coromandel.com → "coromandel"
+    Examples:
+    - admin@coromandel.com → "coromandel"
+    - user@philipderbekodachido.onmicrosoft.com → "dachido" (special handling)
+    - admin@company.co.in → "company"
     """
     if not email or "@" not in email:
-        return None
+        print(f"⚠️  Invalid email format: {email}")
+        return "default"
     
-    domain = email.split("@")[1].split(".")[0].lower()
-    return domain
+    domain = email.split("@")[1]
+    
+    # Special handling for Microsoft domains
+    if "onmicrosoft.com" in domain:
+        # philipderbekodachido.onmicrosoft.com → check if contains "dachido"
+        org_part = domain.split(".")[0].lower()
+        if "dachido" in org_part:
+            print(f"✅ Extracted organization: dachido (from {email})")
+            return "dachido"
+        print(f"✅ Extracted organization: {org_part} (from {email})")
+        return org_part
+    
+    # For regular domains, take the first part before the TLD
+    # coromandel.com → coromandel
+    org = domain.split(".")[0].lower()
+    print(f"✅ Extracted organization: {org} (from {email})")
+    return org
 
 
 def generate_jwt_token(username, organization, role):
@@ -286,4 +370,3 @@ def has_permission(permission_name):
     
     user_permissions = permissions.get(user_role, [])
     return '*' in user_permissions or permission_name in user_permissions
-

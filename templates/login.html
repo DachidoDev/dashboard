@@ -19,26 +19,26 @@
                             {% endif %}
                             <form method="POST" action="/login">
                                 <div class="form-group">
-                                    <label for="organization">Organization:</label>
+                                    <label for="email">Email (or Organization + Username):</label>
+                                    <input
+                                        type="text"
+                                        class="form-control"
+                                        id="email"
+                                        name="email"
+                                        placeholder="your.email@company.com OR username"
+                                    />
+                                    <small class="form-text text-muted">Enter your email address, or username below</small>
+                                </div>
+                                <div class="form-group">
+                                    <label for="organization">Organization (if using username):</label>
                                     <input
                                         type="text"
                                         class="form-control"
                                         id="organization"
                                         name="organization"
                                         placeholder="e.g., coromandel or dachido"
-                                        required
                                     />
-                                    <small class="form-text text-muted">Enter your organization name (lowercase)</small>
-                                </div>
-                                <div class="form-group">
-                                    <label for="username">Username:</label>
-                                    <input
-                                        type="text"
-                                        class="form-control"
-                                        id="username"
-                                        name="username"
-                                        required
-                                    />
+                                    <small class="form-text text-muted">Only needed if logging in with username (not email)</small>
                                 </div>
                                 <div class="form-group">
                                     <label for="password">Password:</label>

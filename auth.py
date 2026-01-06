@@ -134,6 +134,26 @@ def add_user(organization, username, password, role="customer_admin", email=None
     return True
 
 
+def find_user_by_email(email):
+    """
+    Find user by email address
+    Returns (organization, username, user_data) or (None, None, None) if not found
+    """
+    users = load_users()
+    email_lower = email.lower().strip()
+    
+    for user_key, user_data in users.items():
+        if isinstance(user_data, dict):
+            user_email = user_data.get("email", "").lower().strip()
+            if user_email == email_lower:
+                # Extract organization and username from user_key (format: "org:username")
+                parts = user_key.split(":")
+                if len(parts) == 2:
+                    return parts[0], parts[1], user_data
+    
+    return None, None, None
+
+
 def check_password(organization, username, password):
     """
     Check password and return (success, role, organization) tuple
@@ -169,6 +189,25 @@ def check_password(organization, username, password):
         return True, role, org
     
     return False, None, None
+
+
+def check_password_by_email(email, password):
+    """
+    Check password using email address
+    Returns (success, role, organization, username) tuple
+    """
+    org, username, user_data = find_user_by_email(email)
+    
+    if not org or not username or not user_data:
+        return False, None, None, None
+    
+    # Check password
+    if isinstance(user_data, dict) and "password" in user_data:
+        if bcrypt.check_password_hash(user_data["password"], password):
+            role = user_data.get("role", "customer_admin")
+            return True, role, org, username
+    
+    return False, None, None, None
 
 
 def generate_jwt_token(username, organization, role):

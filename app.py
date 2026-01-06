@@ -40,7 +40,7 @@ def favicon():
     return '', 204  # Return empty response with No Content status
 app.config["SECRET_KEY"] = os.environ.get("SECRET_KEY", "your_super_secret_key")
 
-# Import Azure AD authentication
+# Import Azure AD authentication module
 try:
     from auth_azure import (
         require_auth, require_role, require_dachido_admin,
@@ -54,7 +54,7 @@ try:
 except ImportError as e:
     AZURE_AUTH_ENABLED = False
     print(f"⚠️  Azure AD authentication not available: {e}")
-    # Fallback decorators (will fail if used)
+    # Fallback decorators
     def require_auth(f):
         @wraps(f)
         def decorated_function(*args, **kwargs):
@@ -67,11 +67,8 @@ except ImportError as e:
 # Use Azure AD login_required as the main decorator
 login_required = require_auth
 
-# Import auth module for organization management functions (still needed for organizations.json)
-import auth
-
-# Import auth module for organization management functions (still needed for organizations.json)
-import auth
+# KEEP this import for organization management (still needed)
+import auth  # For load_organizations() and get_organization()
 
 
 #######################################################
@@ -1875,12 +1872,10 @@ def debug_companies():
 
 
 ################################################
-# User management routes
+# Authentication routes
 @app.route("/login")
 def azure_login():
-    """
-    Azure AD login route - redirects to Microsoft login
-    """
+    """Azure AD login route - redirects to Microsoft login"""
     if not AZURE_AUTH_ENABLED:
         return "<h1>Configuration Error</h1><p>Azure AD authentication is not configured. Please contact administrator.</p>", 500
     
@@ -1894,13 +1889,10 @@ def azure_login():
 
 @app.route("/auth/callback")
 def azure_auth_callback():
-    """
-    Azure AD OAuth callback - handles authentication response
-    """
+    """Azure AD OAuth callback - handles authentication response"""
     if not AZURE_AUTH_ENABLED:
         return redirect(url_for("azure_login"))
     
-    # Get authorization code from query parameters
     auth_code = request.args.get("code")
     error = request.args.get("error")
     
@@ -1927,33 +1919,40 @@ def azure_auth_callback():
         # Extract app roles from ID token
         azure_roles = get_app_roles_from_token(id_token)
         
+        print(f"🔍 Azure roles from token: {azure_roles}")
+        
+        if not azure_roles:
+            return """
+            <h1>Access Denied</h1>
+            <p>You don't have any assigned roles for this application.</p>
+            <p>Please contact your administrator to assign you an appropriate role.</p>
+            <p><a href="/login">Try logging in again</a></p>
+            """, 403
+        
         # Map Azure roles to our organization/role system
-        organization, role, _ = map_role_to_organization_and_role(azure_roles)
+        organization, role, is_dachido = map_role_to_organization_and_role(azure_roles)
         
         # If organization not determined from role, extract from email
         if not organization:
             email = user_info.get("mail") or user_info.get("userPrincipalName")
             organization = extract_organization_from_email(email)
         
-        # If still no organization, use email domain as fallback
-        if not organization:
-            email = user_info.get("mail") or user_info.get("userPrincipalName")
-            if email:
-                organization = extract_organization_from_email(email)
-        
         # Get username from user info
         username = user_info.get("mail") or user_info.get("userPrincipalName") or user_info.get("displayName", "").replace(" ", ".")
         
-        # If no role found, default to customer_admin
+        # If no role found, deny access
         if not role:
-            role = "customer_admin"
+            return """
+            <h1>Access Denied</h1>
+            <p>Your role could not be determined from your Azure AD app role assignment.</p>
+            <p>Please contact your administrator.</p>
+            """, 403
         
-        # If no organization found, use email domain
+        # If no organization found, use default
         if not organization:
-            email = user_info.get("mail") or user_info.get("userPrincipalName")
-            organization = extract_organization_from_email(email) or "default"
+            organization = "default"
         
-        print(f"✅ Azure AD login successful: {organization}:{username} (role: {role})")
+        print(f"✅ Azure AD login successful: {organization}:{username} (role: {role}, is_dachido: {is_dachido})")
         
         # Generate JWT token
         token = generate_jwt_token(username, organization, role)
@@ -1977,24 +1976,18 @@ def azure_auth_callback():
         print(f"⚠️  Azure AD callback error: {e}")
         import traceback
         traceback.print_exc()
-        return f"<h1>Authentication Error</h1><p>{str(e)}</p><p>Please contact administrator.</p>", 500
-
-
-# Registration route removed - users are now managed in Azure AD
-# To add users: Azure AD → Enterprise applications → Your app → Users and groups
+        return f"""
+        <h1>Authentication Error</h1>
+        <p>{str(e)}</p>
+        <p><a href="/login">Try logging in again</a></p>
+        """, 500
 
 
 @app.route("/logout")
 def logout():
-    """Logout by clearing JWT cookie and redirecting to Azure AD logout"""
+    """Logout by clearing JWT cookie"""
     response = make_response(redirect(url_for("azure_login")))
     response.set_cookie("auth_token", "", expires=0)
-    
-    # Optional: Redirect to Azure AD logout endpoint for complete sign-out
-    # Uncomment if you want users to be signed out of Microsoft as well
-    # azure_logout_url = f"https://login.microsoftonline.com/{AZURE_TENANT_ID}/oauth2/v2.0/logout?post_logout_redirect_uri={request.url_root}"
-    # return redirect(azure_logout_url)
-    
     return response
 
 
